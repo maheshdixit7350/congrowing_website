@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ConGrowing — Random Voice Calls & Communication Skills Platform</title>
+  <meta name="description" content="Connect instantly with random people worldwide via live voice calls. Improve your confidence, public speaking, English fluency, and elevate your CRI Score!" />
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- Custom Responsive Styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Background Decorative Glow Orbs -->
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+  <div class="bg-glow glow-3"></div>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="container nav-container">
+      <div class="brand">
+        <div class="brand-logo-icon">
+          <i class="fa-solid fa-signal"></i>
+        </div>
+        <span class="brand-name">Con<span>Growing</span></span>
+      </div>
+
+      <nav class="nav-links" id="navLinks">
+        <a href="#speakers" class="active"><i class="fa-solid fa-users"></i> Live Speakers</a>
+        <a href="#podcasts"><i class="fa-solid fa-podcast"></i> Voice Stages</a>
+        <a href="#analytics"><i class="fa-solid fa-chart-radar"></i> CRI Analytics</a>
+        <a href="#leaderboard"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Real Audience Live Counter Pill -->
+        <div class="live-status-pill" id="globalLiveBadge">
+          <span class="live-dot pulse"></span>
+          <span id="liveCounterText">1 Live Online</span>
+        </div>
+
+        <!-- Logged Out Auth Button -->
+        <button class="btn btn-outline" id="btnOpenAuth"><i class="fa-solid fa-user-lock"></i> Login / Register</button>
+
+        <!-- Logged In User Profile Widget -->
+        <div class="user-profile-badge hidden" id="userProfileBadge">
+          <img src="" alt="User Avatar" id="navUserAvatar" />
+          <div class="user-badge-info">
+            <span class="user-badge-name" id="navUserName">Sameer Sahu</span>
+            <span class="user-badge-cri" id="navUserCri">CRI 850 ⭐</span>
+          </div>
+          <button class="btn-logout" id="btnLogout" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+
+        <button class="btn btn-primary" id="btnNavQuickCall"><i class="fa-solid fa-bolt"></i> Quick Match</button>
+        
+        <!-- Mobile Menu Toggle Button -->
+        <button class="mobile-toggle" id="btnMobileMenu" aria-label="Toggle Navigation">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Guest Access Notice Banner -->
+  <div class="access-notice-bar" id="guestNoticeBar">
+    <div class="container notice-flex">
+      <span><i class="fa-solid fa-shield-halved"></i> <strong>Visitor Notice:</strong> Please Login or Register to connect on live voice calls and earn CRI score points.</span>
+      <button class="btn btn-sm btn-primary" id="btnNoticeLogin"><i class="fa-solid fa-key"></i> Login Now</button>
+    </div>
+  </div>
+
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <div class="container hero-container">
+      <div class="hero-content">
+        <div class="badge-tag"><i class="fa-solid fa-microphone-lines"></i> Instant Random Voice Calls</div>
+        <h1>Master Your <span>Communication Skills</span> & Build Unshakable Confidence</h1>
+        <p>Connect with real people around the world in 1-on-1 voice calls. Practice English fluency, public speaking, mock interview prep, and grow your CRI (Confidence Readiness Index) score every day!</p>
+        
+        <div class="hero-cta-group">
+          <button class="btn btn-lg btn-primary pulse-btn" id="btnHeroConnect">
+            <i class="fa-solid fa-phone-volume"></i> Start Random Voice Call Now
+          </button>
+          <button class="btn btn-lg btn-glass" id="btnHeroExplore">
+            <i class="fa-solid fa-magnifying-glass"></i> Explore Live Speakers
+          </button>
+        </div>
+
+        <!-- Real Audience Live Stats -->
+        <div class="hero-stats">
+          <div class="stat-item">
+            <h3 id="statLiveUsers">1</h3>
+            <p>Live Active Audience</p>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <h3>98.4%</h3>
+            <p>Positive Feedback</p>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <h3>+4.8M</h3>
+            <p>Minutes Spoken</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero Visual Card -->
+      <div class="hero-visual">
+        <div class="hero-match-card glass-card">
+          <div class="card-status-badge"><span class="live-dot"></span> TOP COMPATIBILITY MATCH</div>
+          <div class="user-avatar-large">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80" alt="Elena Rostova" id="heroUserImg">
+            <div class="avatar-glow"></div>
+          </div>
+          <h3 id="heroUserName">Elena Rostova</h3>
+          <p class="user-topic" id="heroUserTopic"><i class="fa-solid fa-comments"></i> AI Tech & Future Trends</p>
+          
+          <div class="cri-badge-wrapper">
+            <span class="cri-chip"><i class="fa-solid fa-award"></i> CRI 845 · Master</span>
+            <span class="match-chip"><i class="fa-solid fa-fire"></i> 98% Match</span>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="btnCallHeroUser">
+            <i class="fa-solid fa-phone"></i> Call Elena Now
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live Speakers Section -->
+  <section class="section" id="speakers">
+    <div class="container">
+      <div class="section-header">
+        <div>
+          <h2>Available Speakers <span>Right Now</span></h2>
+          <p>Find a partner with matching interests and start an instant voice call</p>
+        </div>
+        
+        <!-- Filter Controls -->
+        <div class="filter-bar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" placeholder="Search by name, topic, language..." />
+          </div>
+          <div class="category-chips" id="categoryContainer">
+            <button class="chip active" data-cat="All">All Topics</button>
+            <button class="chip" data-cat="English">English Fluency</button>
+            <button class="chip" data-cat="Speaking">Public Speaking</button>
+            <button class="chip" data-cat="Business">Business & Tech</button>
+            <button class="chip" data-cat="Interview">Job Interviews</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Speakers Grid -->
+      <div class="speakers-grid" id="speakersGrid">
+        <!-- Dynamically rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- Public Voice Stages / Podcasts Section -->
+  <section class="section bg-card-section" id="podcasts">
+    <div class="container">
+      <div class="section-header">
+        <div>
+          <h2>Public <span>Voice Stages</span> & Group Podcasts</h2>
+          <p>Join live group conversations as a listener or raise your hand to speak on stage</p>
+        </div>
+      </div>
+
+      <div class="podcasts-grid">
+        <div class="podcast-card glass-card">
+          <div class="podcast-banner">
+            <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=500&auto=format&fit=crop&q=60" alt="Podcast 1">
+            <span class="badge-live"><i class="fa-solid fa-circle"></i> STAGE LIVE</span>
+            <span class="listeners-tag"><i class="fa-solid fa-headphones"></i> Live Stage</span>
+          </div>
+          <div class="podcast-body">
+            <h3>English Fluency Lounge</h3>
+            <p>Open stage for accent practice, idioms, and friendly conversations.</p>
+            <div class="podcast-footer">
+              <span class="host-name"><i class="fa-solid fa-user-gear"></i> Host: Sarah M.</span>
+              <button class="btn btn-sm btn-primary btnListenStage" data-title="English Fluency Lounge"><i class="fa-solid fa-play"></i> Join Stage</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="podcast-card glass-card">
+          <div class="podcast-banner">
+            <img src="https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=500&auto=format&fit=crop&q=60" alt="Podcast 2">
+            <span class="badge-live"><i class="fa-solid fa-circle"></i> STAGE LIVE</span>
+            <span class="listeners-tag"><i class="fa-solid fa-headphones"></i> Live Stage</span>
+          </div>
+          <div class="podcast-body">
+            <h3>Tech & Startup Pitch Practice</h3>
+            <p>Pitch your idea in 3 minutes and receive constructive feedback from founders.</p>
+            <div class="podcast-footer">
+              <span class="host-name"><i class="fa-solid fa-user-gear"></i> Host: Alex Vance</span>
+              <button class="btn btn-sm btn-primary btnListenStage" data-title="Tech Pitch Stage"><i class="fa-solid fa-play"></i> Join Stage</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="podcast-card glass-card">
+          <div class="podcast-banner">
+            <img src="https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=500&auto=format&fit=crop&q=60" alt="Podcast 3">
+            <span class="badge-live bg-orange"><i class="fa-solid fa-clock"></i> STARTS IN 10m</span>
+            <span class="listeners-tag"><i class="fa-solid fa-user-check"></i> 2.4k Registered</span>
+          </div>
+          <div class="podcast-body">
+            <h3>Overcoming Stage Fright</h3>
+            <p>Interactive workshop on vocal projection, body language, and speech anxiety.</p>
+            <div class="podcast-footer">
+              <span class="host-name"><i class="fa-solid fa-user-gear"></i> Host: Dr. Marcus</span>
+              <button class="btn btn-sm btn-outline btnListenStage" data-title="Stage Fright Workshop"><i class="fa-solid fa-bell"></i> Remind Me</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CRI Analytics Section -->
+  <section class="section" id="analytics">
+    <div class="container">
+      <div class="analytics-wrapper glass-card">
+        <div class="analytics-info">
+          <div class="badge-tag"><i class="fa-solid fa-chart-line"></i> CRI SCORE ENGINE</div>
+          <h2>What is <span>CRI Score</span>?</h2>
+          <p>CRI (Confidence & Readiness Index) measures your speaking frequency, vocabulary variance, vocal clarity, active listening, and peer ratings. Every completed call boosts your score!</p>
+          
+          <div class="cri-metrics-list">
+            <div class="metric-row">
+              <span><i class="fa-solid fa-check-circle"></i> Fluency & Pace</span>
+              <div class="progress-bar"><div class="progress-fill" style="width: 88%;"></div></div>
+              <strong>88/100</strong>
+            </div>
+            <div class="metric-row">
+              <span><i class="fa-solid fa-check-circle"></i> Vocal Confidence</span>
+              <div class="progress-bar"><div class="progress-fill" style="width: 92%;"></div></div>
+              <strong>92/100</strong>
+            </div>
+            <div class="metric-row">
+              <span><i class="fa-solid fa-check-circle"></i> Active Listening</span>
+              <div class="progress-bar"><div class="progress-fill" style="width: 86%;"></div></div>
+              <strong>86/100</strong>
+            </div>
+            <div class="metric-row">
+              <span><i class="fa-solid fa-check-circle"></i> Engagement Rating</span>
+              <div class="progress-bar"><div class="progress-fill" style="width: 90%;"></div></div>
+              <strong>90/100</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="analytics-visual">
+          <div class="radar-card">
+            <h3>Your Communication Breakdown</h3>
+            <div class="score-main-display">
+              <span class="score-number" id="userCriDisplay">850</span>
+              <span class="score-label"><i class="fa-solid fa-arrow-trend-up"></i> +14.2% This Week</span>
+            </div>
+            <canvas id="criRadarCanvas" width="280" height="280"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Leaderboard Section -->
+  <section class="section bg-card-section" id="leaderboard">
+    <div class="container">
+      <div class="section-header center">
+        <h2>Top Speakers <span>Leaderboard</span></h2>
+        <p>Highest rated community members empowering others with confident voice calls</p>
+      </div>
+
+      <div class="leaderboard-table glass-card">
+        <div class="lb-header">
+          <span>Rank</span>
+          <span>Speaker</span>
+          <span>CRI Score</span>
+          <span>Speaking Hours</span>
+          <span>Action</span>
+        </div>
+        <div class="lb-body" id="leaderboardRows">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Voice Call Modal -->
+  <div class="modal-overlay" id="callModal">
+    <div class="modal-card call-modal-card">
+      <button class="modal-close" id="btnCloseCallModal"><i class="fa-solid fa-xmark"></i></button>
+
+      <div class="call-modal-header">
+        <span class="call-status-tag pulse"><i class="fa-solid fa-circle"></i> LIVE VOICE CALL IN PROGRESS</span>
+        <span class="call-timer" id="callTimer">00:14</span>
+      </div>
+
+      <div class="call-speakers-stage">
+        <!-- User 1 (Me) -->
+        <div class="speaker-profile">
+          <div class="speaker-avatar-wrap">
+            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80" alt="Me" id="meAvatar">
+            <div class="audio-pulse-ring" id="mePulse"></div>
+          </div>
+          <h4 id="meName">You</h4>
+          <span class="speaker-cri" id="meCri">CRI 850</span>
+        </div>
+
+        <div class="call-connector-line">
+          <div class="waveform-animation">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <!-- User 2 (Partner) -->
+        <div class="speaker-profile">
+          <div class="speaker-avatar-wrap">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80" alt="Partner" id="partnerAvatar">
+            <div class="audio-pulse-ring active" id="partnerPulse"></div>
+          </div>
+          <h4 id="partnerName">Elena Rostova</h4>
+          <span class="speaker-cri" id="partnerCri">CRI 845</span>
+        </div>
+      </div>
+
+      <!-- Real Audio Waveform Canvas -->
+      <div class="audio-canvas-box">
+        <canvas id="waveformCanvas" width="480" height="70"></canvas>
+      </div>
+
+      <!-- Conversation Icebreaker Card -->
+      <div class="icebreaker-card">
+        <i class="fa-solid fa-lightbulb"></i>
+        <div>
+          <strong>Icebreaker Question:</strong>
+          <p id="icebreakerText">"What is a personal challenge you overcame recently that made you proud?"</p>
+        </div>
+      </div>
+
+      <!-- Call Controls -->
+      <div class="call-controls-bar">
+        <button class="ctrl-btn" id="btnToggleMic" title="Mute/Unmute Mic">
+          <i class="fa-solid fa-microphone"></i>
+        </button>
+        <button class="ctrl-btn" id="btnToggleSpeaker" title="Toggle Speaker">
+          <i class="fa-solid fa-volume-high"></i>
+        </button>
+        <button class="ctrl-btn btn-end-call" id="btnEndCall" title="End Voice Call">
+          <i class="fa-solid fa-phone-slash"></i> End Call
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRI Reward / Rating Modal -->
+  <div class="modal-overlay" id="rewardModal">
+    <div class="modal-card reward-card glass-card">
+      <div class="reward-icon"><i class="fa-solid fa-star"></i></div>
+      <h2>Awesome Voice Session!</h2>
+      <p>You completed a voice call with <strong id="rewardPartnerName">Elena Rostova</strong>.</p>
+      
+      <div class="points-gain-badge">
+        <i class="fa-solid fa-circle-plus"></i> +15 CRI Score Earned!
+      </div>
+
+      <div class="rating-box">
+        <p>Rate partner's communication & friendliness:</p>
+        <div class="star-rating">
+          <i class="fa-solid fa-star active"></i>
+          <i class="fa-solid fa-star active"></i>
+          <i class="fa-solid fa-star active"></i>
+          <i class="fa-solid fa-star active"></i>
+          <i class="fa-solid fa-star active"></i>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="btnClaimReward">
+        <i class="fa-solid fa-check"></i> Continue & Save CRI Score
+      </button>
+    </div>
+  </div>
+
+  <!-- Mandatory Login / Signup Auth Modal -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-card auth-card glass-card">
+      <button class="modal-close" id="btnCloseAuthModal"><i class="fa-solid fa-xmark"></i></button>
+      
+      <div class="auth-header-notice">
+        <i class="fa-solid fa-lock-open"></i>
+        <h3>Login Required</h3>
+        <p>Please login or create an account to start voice calls & build your CRI score.</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLogin">Login</button>
+        <button class="auth-tab" id="tabSignup">Register</button>
+      </div>
+
+      <form id="authForm" class="auth-form">
+        <div class="input-group signup-only hidden">
+          <label>Full Name</label>
+          <input type="text" id="authName" placeholder="e.g. Sameer Sahu" />
+        </div>
+        <div class="input-group signup-only hidden">
+          <label>Username</label>
+          <input type="text" id="authUsername" placeholder="e.g. sameersahu" />
+        </div>
+        <div class="input-group">
+          <label>Email Address</label>
+          <input type="email" id="authEmail" placeholder="yourname@gmail.com" required />
+        </div>
+        <div class="input-group">
+          <label>Password</label>
+          <input type="password" id="authPassword" placeholder="••••••••" required />
+        </div>
+
+        <div class="auth-error-msg hidden" id="authErrorMsg"></div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="btnAuthSubmit">
+          <i class="fa-solid fa-right-to-bracket"></i> Login to ConGrowing
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Responsive Footer -->
+  <footer class="footer">
+    <div class="container footer-container">
+      <div class="footer-brand">
+        <div class="brand">
+          <div class="brand-logo-icon"><i class="fa-solid fa-signal"></i></div>
+          <span class="brand-name">Con<span>Growing</span></span>
+        </div>
+        <p>Connecting people worldwide to improve communication skills, English fluency, and public speaking confidence.</p>
+      </div>
+      <div class="footer-links">
+        <p>&copy; 2026 ConGrowing Web Platform. Powered by Cloud Supabase PostgreSQL.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- App Script -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
