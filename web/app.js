@@ -176,13 +176,14 @@ function initSocket() {
         }
       });
 
-      // --- WebRTC Real-Time Voice Signaling ---
+      // --- WebRTC Real-Time 2-Way Voice Signaling ---
       socket.on('user_joined', async ({ socketId }) => {
         console.log('🎙️ Partner joined call room:', socketId);
-        if (currentRoomId && micStream) {
+        if (currentRoomId) {
           createPeerConnection(currentRoomId);
+          await ensureMicStreamAndTracks();
           try {
-            const offer = await peerConnection.createOffer();
+            const offer = await peerConnection.createOffer({ offerToReceiveAudio: true });
             await peerConnection.setLocalDescription(offer);
             socket.emit('webrtc_offer', { offer, roomId: currentRoomId });
           } catch (e) {
@@ -195,9 +196,10 @@ function initSocket() {
         console.log('🎙️ Received WebRTC audio offer');
         if (currentRoomId) {
           createPeerConnection(currentRoomId);
+          await ensureMicStreamAndTracks();
           try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await peerConnection.createAnswer();
+            const answer = await peerConnection.createAnswer({ offerToReceiveAudio: true });
             await peerConnection.setLocalDescription(answer);
             socket.emit('webrtc_answer', { answer, roomId: currentRoomId });
           } catch (e) {
@@ -211,6 +213,7 @@ function initSocket() {
         if (peerConnection) {
           try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            console.log('🎙️ 2-Way Bidirectional WebRTC Audio Connection Established!');
           } catch (e) {}
         }
       });
@@ -225,6 +228,34 @@ function initSocket() {
     }
   } catch (err) {
     console.log('Socket connection warning, using HTTP fallback', err);
+  }
+}
+
+// Ensure local microphone stream is captured and attached to RTCPeerConnection for 2-way audio
+async function ensureMicStreamAndTracks() {
+  if (!micStream) {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(micStream);
+      source.connect(analyser);
+      analyser.fftSize = 64;
+      renderWaveformCanvas();
+    } catch (e) {
+      console.log('Mic stream capture error:', e);
+    }
+  }
+
+  if (peerConnection && micStream) {
+    const senders = peerConnection.getSenders();
+    micStream.getTracks().forEach(track => {
+      const alreadySent = senders.some(s => s.track && s.track.kind === 'audio');
+      if (!alreadySent) {
+        console.log('🎙️ Attaching local audio track to WebRTC peer connection:', track.label);
+        peerConnection.addTrack(track, micStream);
+      }
+    });
   }
 }
 
