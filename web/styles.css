@@ -1282,7 +1282,7 @@ canvas#waveformCanvas {
 }
 
 /* Responsive Rules for Mobile / Tablet / Desktop */
-@media (max-width: 992px) {
+@media (max-width: 1024px) {
   .hero-container {
     grid-template-columns: 1fr;
     gap: 40px;
@@ -1300,42 +1300,302 @@ canvas#waveformCanvas {
   }
   .analytics-wrapper {
     grid-template-columns: 1fr;
+    gap: 30px;
   }
 }
 
 @media (max-width: 768px) {
+  .container {
+    padding: 0 16px;
+  }
+
+  .navbar {
+    padding: 12px 0;
+  }
+
+  .brand {
+    font-size: 1.3rem;
+  }
+
+  .brand-logo-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+    border-radius: 10px;
+  }
+
   .mobile-toggle {
     display: flex;
     align-items: center;
     justify-content: center;
   }
+
   .desktop-only {
     display: none;
   }
+
   .nav-links {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
-    background: #0b1120;
+    background: rgba(11, 17, 32, 0.98);
+    backdrop-filter: blur(20px);
     flex-direction: column;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border-light);
+    padding: 20px 20px;
+    gap: 16px;
+    border-bottom: 1px solid var(--border-glow);
     display: none;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
   }
+
   .nav-links.mobile-open {
     display: flex;
   }
-  .hero-content h1 {
-    font-size: 2.5rem;
+
+  .nav-actions {
+    gap: 8px;
   }
+
+  .live-status-pill {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+  }
+
+  #btnNavQuickCall {
+    padding: 8px 12px;
+    font-size: 0.82rem;
+  }
+
+  .notice-flex {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .hero-section {
+    padding: 40px 0 36px;
+  }
+
+  .hero-content h1 {
+    font-size: 2.1rem;
+    line-height: 1.2;
+  }
+
+  .hero-content p {
+    font-size: 0.98rem;
+    margin-bottom: 24px;
+  }
+
   .hero-cta-group {
     flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    margin-bottom: 32px;
   }
-  .lb-header, .lb-row {
-    grid-template-columns: 40px 1fr 90px 80px;
+
+  .hero-cta-group .btn {
+    width: 100%;
   }
+
+  .hero-stats {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-around;
+    padding: 14px 10px;
+    gap: 8px;
+  }
+
+  .stat-item h3 {
+    font-size: 1.25rem;
+  }
+
+  .stat-item p {
+    font-size: 0.75rem;
+  }
+
+  .stat-divider {
+    height: 28px;
+  }
+
+  .hero-match-card {
+    padding: 20px 16px;
+  }
+
+  .section {
+    padding: 50px 0;
+  }
+
+  .section-header h2 {
+    font-size: 1.7rem;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .search-box {
+    min-width: 100%;
+    width: 100%;
+  }
+
+  .category-chips {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .speakers-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .speaker-card {
+    padding: 20px;
+  }
+
+  .podcasts-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
   .metric-row {
-    grid-template-columns: 110px 1fr 50px;
+    grid-template-columns: 110px 1fr 45px;
+    font-size: 0.82rem;
+    gap: 8px;
+  }
+
+  .score-number {
+    font-size: 2.8rem;
+  }
+
+  /* Scrollable Leaderboard Table on Mobile */
+  .leaderboard-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 16px;
+  }
+
+  .lb-header, .lb-row {
+    min-width: 520px;
+    grid-template-columns: 50px 1fr 100px 90px 90px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+  }
+
+  .speaker-user-cell img {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Call & Auth Modals Responsiveness */
+  .modal-card {
+    width: 95%;
+    max-width: 100%;
+    margin: 10px;
+  }
+
+  .call-modal-card {
+    padding: 20px 16px;
+    border-radius: 20px;
+  }
+
+  .call-speakers-stage {
+    gap: 10px;
+  }
+
+  .speaker-avatar-wrap {
+    width: 68px;
+    height: 68px;
+  }
+
+  .speaker-profile h4 {
+    font-size: 0.95rem;
+  }
+
+  .waveform-animation {
+    height: 20px;
+  }
+
+  .ctrl-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 0.95rem;
+  }
+
+  .btn-end-call {
+    padding: 0 16px;
+    font-size: 0.88rem;
+  }
+
+  .footer-container {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-name {
+    font-size: 1.15rem;
+  }
+
+  #liveCounterText {
+    font-size: 0.75rem;
+  }
+
+  .btn-outline#btnOpenAuth {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  .user-profile-badge {
+    padding: 3px 8px;
+  }
+
+  .user-profile-badge img {
+    width: 28px;
+    height: 28px;
+  }
+
+  .user-badge-name {
+    font-size: 0.75rem;
+  }
+
+  .user-badge-cri {
+    font-size: 0.65rem;
+  }
+
+  .hero-content h1 {
+    font-size: 1.85rem;
+  }
+
+  .hero-stats {
+    padding: 12px 6px;
+  }
+
+  .stat-item h3 {
+    font-size: 1.1rem;
+  }
+
+  .stat-item p {
+    font-size: 0.68rem;
+  }
+
+  .call-speakers-stage {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .call-connector-line {
+    display: none;
   }
 }
