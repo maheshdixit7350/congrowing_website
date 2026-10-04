@@ -123,10 +123,24 @@ function initSocket() {
           if (statLiveEl) statLiveEl.innerText = liveVal.toLocaleString();
         }
       });
-      socket.on('leaderboard_update', (data) => {
-        console.log('⚡ Real-time Leaderboard update received:', data);
-        fetchLeaderboard();
+      socket.on('speakers_updated', () => {
+        console.log('⚡ Live speakers list updated in real-time');
         fetchLiveUsers();
+      });
+
+      socket.on('call_ended_by_partner', ({ message }) => {
+        console.log('⏹️ Call ended by partner:', message);
+        stopRingtone();
+        endVoiceCall(true); // true = call ended by remote partner
+      });
+
+      socket.on('user_left', () => {
+        console.log('⏹️ Partner left room');
+        stopRingtone();
+        const modal = document.getElementById('callModal');
+        if (modal && modal.classList.contains('active')) {
+          endVoiceCall(true);
+        }
       });
 
       // --- INCOMING CALL & DIRECT CALL SIGNALING ---
@@ -165,7 +179,7 @@ function initSocket() {
         console.log('❌ Call declined:', reason);
         stopRingtone();
         alert(reason || 'Call was declined by user.');
-        endVoiceCall();
+        endVoiceCall(true);
       });
 
       socket.on('user_offline', ({ recipientId, message }) => {
@@ -304,6 +318,17 @@ function createPeerConnection(roomId) {
         socket.emit('webrtc_ice', { candidate: event.candidate, roomId });
       }
     };
+
+    peerConnection.onconnectionstatechange = () => {
+      console.log('📡 WebRTC connection state changed:', peerConnection ? peerConnection.connectionState : 'null');
+      if (peerConnection && (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed')) {
+        const modal = document.getElementById('callModal');
+        if (modal && modal.classList.contains('active')) {
+          console.log('⚠️ WebRTC connection lost/dropped. Stopping call on both ends.');
+          endVoiceCall(true);
+        }
+      }
+    };
   } catch (e) {
     console.log('RTCPeerConnection error:', e);
   }
@@ -387,36 +412,47 @@ function renderSpeakersGrid(users) {
   const searchVal = document.getElementById('searchInput')?.value.toLowerCase() || '';
 
   const filtered = users.filter(user => {
-    const matchSearch = user.name.toLowerCase().includes(searchVal) || user.topic.toLowerCase().includes(searchVal);
+    const topicStr = user.topic || '';
+    const matchSearch = user.name.toLowerCase().includes(searchVal) || topicStr.toLowerCase().includes(searchVal);
     const matchCat = currentCategory === 'All' || 
-                     (currentCategory === 'English' && user.topic.toLowerCase().includes('english')) ||
-                     (currentCategory === 'Speaking' && (user.topic.toLowerCase().includes('speaking') || user.topic.toLowerCase().includes('confidence'))) ||
-                     (currentCategory === 'Business' && (user.topic.toLowerCase().includes('business') || user.topic.toLowerCase().includes('tech'))) ||
-                     (currentCategory === 'Interview' && user.topic.toLowerCase().includes('interview'));
+                     (currentCategory === 'English' && topicStr.toLowerCase().includes('english')) ||
+                     (currentCategory === 'Speaking' && (topicStr.toLowerCase().includes('speaking') || topicStr.toLowerCase().includes('confidence'))) ||
+                     (currentCategory === 'Business' && (topicStr.toLowerCase().includes('business') || topicStr.toLowerCase().includes('tech'))) ||
+                     (currentCategory === 'Interview' && topicStr.toLowerCase().includes('interview'));
     return matchSearch && matchCat;
   });
 
   filtered.forEach(user => {
     const card = document.createElement('div');
-    card.className = 'glass-card speaker-card';
+    const isOnline = !!user.is_online;
+    const isSelf = currentUser && (currentUser.id == user.id);
+    const statusText = isOnline ? (isSelf ? 'YOU (ONLINE)' : 'ONLINE NOW') : 'OFFLINE';
+    const statusClass = isOnline ? 'online' : 'offline';
+
+    card.className = `glass-card speaker-card ${isOnline ? 'is-online' : 'is-offline'}`;
     card.innerHTML = `
       <div class="speaker-card-top">
         <div class="speaker-avatar">
-          <img src="${user.avatar_url}" alt="${user.name}">
-          <span class="speaker-status-dot"></span>
+          <img src="${user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username || 'user'}`}" alt="${user.name}">
+          <span class="speaker-status-dot ${statusClass}"></span>
         </div>
         <div class="speaker-info">
-          <h3>${user.name}</h3>
-          <p class="speaker-topic"><i class="fa-solid fa-comments"></i> ${user.topic}</p>
+          <div class="speaker-header-row">
+            <h3>${user.name}</h3>
+            <span class="status-badge ${statusClass}">
+              <i class="fa-solid fa-circle"></i> ${statusText}
+            </span>
+          </div>
+          <p class="speaker-topic"><i class="fa-solid fa-comments"></i> ${user.topic || 'General Voice Practice'}</p>
           <div class="speaker-meta">
-            <span class="cri-chip"><i class="fa-solid fa-award"></i> CRI ${user.cri_score}</span>
-            <span class="match-chip"><i class="fa-solid fa-fire"></i> ${user.compatibility || 92}%</span>
+            <span class="cri-chip"><i class="fa-solid fa-award"></i> CRI ${user.cri_score || 750}</span>
+            <span class="match-chip"><i class="fa-solid fa-fire"></i> ${user.compatibility || 92}% Match</span>
           </div>
         </div>
       </div>
       <div class="speaker-card-actions">
-        <button class="btn btn-primary btn-block btnStartVoiceCall" data-id="${user.id}">
-          <i class="fa-solid fa-phone"></i> Voice Call & Connect
+        <button class="btn ${isOnline ? 'btn-primary' : 'btn-outline'} btn-block btnStartVoiceCall" data-id="${user.id}">
+          <i class="fa-solid ${isOnline ? 'fa-phone-volume' : 'fa-phone'}"></i> ${isSelf ? 'Your Profile (Online)' : (isOnline ? 'Voice Call & Connect (LIVE)' : 'Call Speaker')}
         </button>
       </div>
     `;
@@ -426,8 +462,8 @@ function renderSpeakersGrid(users) {
   // Attach Call Button Listeners (guarded by login requirement)
   document.querySelectorAll('.btnStartVoiceCall').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const uid = parseInt(e.currentTarget.getAttribute('data-id'));
-      const partner = currentUsers.find(u => u.id === uid) || currentUsers[0];
+      const uid = parseInt(e.currentTarget.getAttribute('data-id')) || e.currentTarget.getAttribute('data-id');
+      const partner = currentUsers.find(u => u.id == uid) || currentUsers[0];
       requireAuth(() => startVoiceCall(partner));
     });
   });
@@ -589,29 +625,57 @@ function renderSimulatedWaveform() {
   renderWaveformCanvas();
 }
 
-// End Voice Call
-function endVoiceCall() {
+// End Voice Call (handles both manual end and remote partner call drop)
+function endVoiceCall(isRemoteEnd = false) {
+  stopRingtone();
   clearInterval(callTimerInterval);
   if (animFrameId) cancelAnimationFrame(animFrameId);
+  
+  const isRemote = (isRemoteEnd === true);
+
   if (micStream) {
-    micStream.getTracks().forEach(track => track.stop());
+    try {
+      micStream.getTracks().forEach(track => track.stop());
+    } catch (e) {}
+    micStream = null;
+  }
+
+  // If local user initiated the end call, notify partner over socket
+  if (!isRemote && currentRoomId && socket) {
+    socket.emit('end_call_session', { 
+      roomId: currentRoomId, 
+      endedBy: currentUser ? currentUser.id : 'user' 
+    });
   }
 
   // Cleanup WebRTC P2P connection
   if (peerConnection) {
-    peerConnection.close();
+    try {
+      peerConnection.ontrack = null;
+      peerConnection.onicecandidate = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.close();
+    } catch (e) {}
     peerConnection = null;
   }
+
   if (currentRoomId && socket) {
     socket.emit('leave_room', { roomId: currentRoomId });
     currentRoomId = null;
   }
+
   if (remoteAudioEl) {
-    remoteAudioEl.pause();
-    remoteAudioEl.srcObject = null;
+    try {
+      remoteAudioEl.pause();
+      remoteAudioEl.srcObject = null;
+    } catch (e) {}
   }
 
-  document.getElementById('callModal').classList.remove('active');
+  // Hide active call modals
+  const callModal = document.getElementById('callModal');
+  if (callModal) callModal.classList.remove('active');
+  const incomingCallModal = document.getElementById('incomingCallModal');
+  if (incomingCallModal) incomingCallModal.classList.remove('active');
 
   // Compute dynamic performance reward points based on exact call duration
   const durSec = Math.max(1, callSeconds);
@@ -619,14 +683,20 @@ function endVoiceCall() {
   const bonusPoints = Math.floor(durSec / 5);
   currentEarnedPoints = basePoints + bonusPoints;
 
-  // Show Reward Modal
+  // Show Reward Modal if there was an active call partner
   if (activeCallPartner) {
-    document.getElementById('rewardPartnerName').innerText = activeCallPartner.name;
+    const partnerNameEl = document.getElementById('rewardPartnerName');
+    if (partnerNameEl) partnerNameEl.innerText = activeCallPartner.name;
     const pointsBadge = document.querySelector('.points-gain-badge');
     if (pointsBadge) {
       pointsBadge.innerHTML = `<i class="fa-solid fa-circle-plus"></i> +${currentEarnedPoints} CRI Score Earned! (${durSec}s call)`;
     }
-    document.getElementById('rewardModal').classList.add('active');
+    const rewardModal = document.getElementById('rewardModal');
+    if (rewardModal) rewardModal.classList.add('active');
+  }
+
+  if (isRemote) {
+    console.log('⏹️ Call ended by remote partner or connection dropped.');
   }
 }
 
@@ -737,9 +807,9 @@ function setupEventListeners() {
     pendingIncomingCall = null;
   });
 
-  // Call Controls
-  document.getElementById('btnEndCall')?.addEventListener('click', endVoiceCall);
-  document.getElementById('btnCloseCallModal')?.addEventListener('click', endVoiceCall);
+  // Call Controls (Explicitly pass false so local end emits end_call_session to partner)
+  document.getElementById('btnEndCall')?.addEventListener('click', () => endVoiceCall(false));
+  document.getElementById('btnCloseCallModal')?.addEventListener('click', () => endVoiceCall(false));
 
   document.getElementById('btnToggleMic')?.addEventListener('click', (e) => {
     isMuted = !isMuted;

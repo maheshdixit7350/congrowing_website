@@ -190,19 +190,20 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/logout', async (req, res) => {
   const { userId } = req.body;
   if (userId) {
-    if (userSocketMap[userId]) {
-      delete userSocketMap[userId];
-    }
+    if (userSocketMap[userId]) delete userSocketMap[userId];
+    if (userSocketMap[String(userId)]) delete userSocketMap[String(userId)];
     if (supabase) {
       try {
         await supabase.from('users').update({ is_online: false }).eq('id', userId);
       } catch (e) {}
     }
   }
+  broadcastRealLiveCount();
+  io.emit('speakers_updated');
   res.json({ success: true, message: 'Logged out successfully.' });
 });
 
-// Get Live Online Users from Supabase
+// Get Live Online Users from Supabase enriched with real-time socket online status
 app.get('/api/users/live', async (req, res) => {
   const realCount = getRealLiveCount();
   if (supabase) {
@@ -210,18 +211,31 @@ app.get('/api/users/live', async (req, res) => {
       const { data: users, error } = await supabase
         .from('users')
         .select('id, name, username, email, avatar_url, cri_score, speaking_hours, topic, is_online')
-        .eq('is_online', true)
-        .order('cri_score', { ascending: false })
-        .limit(20);
+        .order('cri_score', { ascending: false });
 
       if (!error && users && users.length > 0) {
-        const enriched = users.map(u => ({ ...u, compatibility: 85 + Math.floor(Math.random() * 14) }));
+        const enriched = users.map(u => ({
+          ...u,
+          is_online: !!(userSocketMap[u.id] || userSocketMap[String(u.id)]), // TRUE runtime WebSocket online state!
+          compatibility: 88 + ((typeof u.id === 'number' ? u.id : (u.id || '').length) % 10)
+        }));
+
+        // Sort so currently connected live online users appear AT THE VERY TOP
+        enriched.sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0));
+
         return res.json({ liveCount: realCount, users: enriched });
       }
     } catch (err) {}
   }
 
-  res.json({ liveCount: realCount, users: mockUsers });
+  const enrichedMock = mockUsers.map(u => ({
+    ...u,
+    is_online: !!(userSocketMap[u.id] || userSocketMap[String(u.id)]),
+    compatibility: 88 + (u.id % 10)
+  }));
+  enrichedMock.sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0));
+
+  res.json({ liveCount: realCount, users: enrichedMock });
 });
 
 // Leaderboard from Supabase
@@ -322,15 +336,30 @@ io.on('connection', (socket) => {
   socket.on('register_user', ({ userId, name, username }) => {
     if (userId) {
       userSocketMap[userId] = socket.id;
+      userSocketMap[String(userId)] = socket.id;
       socket.userId = userId;
       console.log(`👤 User #${userId} (${name}) registered socket: ${socket.id}`);
+      io.emit('speakers_updated');
     }
+  });
+
+  socket.on('user_logout', ({ userId }) => {
+    console.log(`👤 User #${userId} logged out`);
+    if (userId) {
+      delete userSocketMap[userId];
+      delete userSocketMap[String(userId)];
+    }
+    if (supabase && userId) {
+      supabase.from('users').update({ is_online: false }).eq('id', userId).then();
+    }
+    broadcastRealLiveCount();
+    io.emit('speakers_updated');
   });
 
   // Initiate call to recipient
   socket.on('call_user', ({ caller, recipientId, roomId }) => {
     console.log(`📞 Call initiated from User #${caller ? caller.id : '?' } (${caller ? caller.name : 'User'}) to User #${recipientId}`);
-    const recipientSocketId = userSocketMap[recipientId];
+    const recipientSocketId = userSocketMap[recipientId] || userSocketMap[String(recipientId)];
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('incoming_call', { caller, roomId });
     } else {
@@ -341,7 +370,7 @@ io.on('connection', (socket) => {
   // Accept incoming call
   socket.on('accept_call', ({ callerId, recipient, roomId }) => {
     console.log(`✅ Call accepted by User #${recipient ? recipient.id : '?' } for Caller #${callerId}`);
-    const callerSocketId = userSocketMap[callerId];
+    const callerSocketId = userSocketMap[callerId] || userSocketMap[String(callerId)];
     if (callerSocketId) {
       io.to(callerSocketId).emit('call_accepted', { recipient, roomId });
     }
@@ -349,7 +378,7 @@ io.on('connection', (socket) => {
 
   // Decline incoming call
   socket.on('decline_call', ({ callerId, reason }) => {
-    const callerSocketId = userSocketMap[callerId];
+    const callerSocketId = userSocketMap[callerId] || userSocketMap[String(callerId)];
     if (callerSocketId) {
       io.to(callerSocketId).emit('call_declined', { reason: reason || 'Call declined by recipient.' });
     }
@@ -357,8 +386,17 @@ io.on('connection', (socket) => {
 
   socket.on('join_room', ({ roomId, userId }) => {
     socket.join(roomId);
+    socket.currentRoomId = roomId;
     console.log(`🎙️ Socket ${socket.id} (User ${userId}) joined room ${roomId}`);
     socket.to(roomId).emit('user_joined', { socketId: socket.id, userId });
+  });
+
+  // Explicit End Call Session event (drops call on both ends)
+  socket.on('end_call_session', ({ roomId, endedBy }) => {
+    console.log(`⏹️ Call session ${roomId} ended by user ${endedBy}`);
+    socket.to(roomId).emit('call_ended_by_partner', { endedBy, message: 'Partner ended the voice call.' });
+    socket.leave(roomId);
+    socket.currentRoomId = null;
   });
 
   socket.on('webrtc_offer', ({ offer, roomId }) => {
@@ -374,19 +412,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave_room', ({ roomId }) => {
-    socket.leave(roomId);
-    socket.to(roomId).emit('user_left', { socketId: socket.id });
+    if (roomId) {
+      socket.to(roomId).emit('call_ended_by_partner', { message: 'Partner left the call room.' });
+      socket.leave(roomId);
+    }
+    socket.currentRoomId = null;
   });
 
   socket.on('disconnect', () => {
     console.log(`🔌 Client disconnected: ${socket.id}`);
-    if (socket.userId && userSocketMap[socket.userId] === socket.id) {
+    if (socket.currentRoomId) {
+      console.log(`⏹️ Socket disconnected while in room ${socket.currentRoomId}. Notifying partner.`);
+      socket.to(socket.currentRoomId).emit('call_ended_by_partner', { message: 'Partner connection was lost or disconnected.' });
+    }
+    if (socket.userId) {
       delete userSocketMap[socket.userId];
+      delete userSocketMap[String(socket.userId)];
       if (supabase) {
         supabase.from('users').update({ is_online: false }).eq('id', socket.userId).then();
       }
     }
     broadcastRealLiveCount();
+    io.emit('speakers_updated');
   });
 });
 
