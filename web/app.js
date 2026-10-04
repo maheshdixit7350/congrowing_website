@@ -53,40 +53,48 @@ function startRingtone() {
   stopRingtone();
   try {
     if (navigator.vibrate) {
-      navigator.vibrate([400, 200, 400, 200, 400, 200, 400]);
+      navigator.vibrate([500, 300, 500, 300, 500, 300, 500, 300]);
     }
   } catch (e) {}
 
   function playToneBurst() {
     try {
-      ringAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (!ringAudioContext || ringAudioContext.state === 'closed') {
+        ringAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      if (ringAudioContext.state === 'suspended') {
+        ringAudioContext.resume().catch(() => {});
+      }
+
       const osc1 = ringAudioContext.createOscillator();
       const osc2 = ringAudioContext.createOscillator();
       const gain = ringAudioContext.createGain();
 
-      osc1.frequency.value = 440; // Dual tone US/European standard phone ringtone 440Hz
-      osc2.frequency.value = 480; // 480Hz
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(440, ringAudioContext.currentTime); // Standard phone ringtone 440Hz
+      osc2.frequency.setValueAtTime(480, ringAudioContext.currentTime); // 480Hz
+
+      gain.gain.setValueAtTime(0.35, ringAudioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ringAudioContext.currentTime + 1.4);
 
       osc1.connect(gain);
       osc2.connect(gain);
       gain.connect(ringAudioContext.destination);
 
-      gain.gain.value = 0.15;
       osc1.start();
       osc2.start();
 
-      setTimeout(() => {
-        try {
-          osc1.stop();
-          osc2.stop();
-          if (ringAudioContext && ringAudioContext.state !== 'closed') ringAudioContext.close();
-        } catch (e) {}
-      }, 1200);
-    } catch (e) {}
+      osc1.stop(ringAudioContext.currentTime + 1.4);
+      osc2.stop(ringAudioContext.currentTime + 1.4);
+    } catch (e) {
+      console.log('Ringtone sound error:', e);
+    }
   }
 
   playToneBurst();
-  ringtoneInterval = setInterval(playToneBurst, 3000);
+  ringtoneInterval = setInterval(playToneBurst, 2500);
 }
 
 function stopRingtone() {
@@ -102,6 +110,24 @@ function stopRingtone() {
     try { navigator.vibrate(0); } catch (e) {}
   }
 }
+
+// Global Audio Unlocking for Mobile & Browser Autoplay Policies
+function unlockAudioOnUserGesture() {
+  const unlock = () => {
+    if (ringAudioContext && ringAudioContext.state === 'suspended') {
+      ringAudioContext.resume().catch(() => {});
+    }
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+    }
+    if (remoteAudioEl && remoteAudioEl.paused && remoteAudioEl.srcObject) {
+      remoteAudioEl.play().catch(() => {});
+    }
+  };
+  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('click', unlock, { passive: true });
+}
+unlockAudioOnUserGesture();
 
 // Socket.io initialization & WebRTC Signaling
 function initSocket() {
@@ -249,8 +275,17 @@ function initSocket() {
 async function ensureMicStreamAndTracks() {
   if (!micStream) {
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume().catch(() => {});
+      }
       analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(micStream);
       source.connect(analyser);
@@ -263,7 +298,8 @@ async function ensureMicStreamAndTracks() {
 
   if (peerConnection && micStream) {
     const senders = peerConnection.getSenders();
-    micStream.getTracks().forEach(track => {
+    micStream.getAudioTracks().forEach(track => {
+      track.enabled = true;
       const alreadySent = senders.some(s => s.track && s.track.kind === 'audio');
       if (!alreadySent) {
         console.log('🎙️ Attaching local audio track to WebRTC peer connection:', track.label);
@@ -279,6 +315,8 @@ function getRemoteAudioElement() {
     remoteAudioEl.id = 'remoteVoiceAudio';
     remoteAudioEl.autoplay = true;
     remoteAudioEl.playsInline = true;
+    remoteAudioEl.volume = 1.0;
+    remoteAudioEl.muted = false;
     remoteAudioEl.setAttribute('playsinline', '');
     remoteAudioEl.setAttribute('autoplay', '');
     document.body.appendChild(remoteAudioEl);
@@ -292,25 +330,47 @@ function createPeerConnection(roomId) {
     peerConnection = new RTCPeerConnection(rtcConfig);
 
     if (micStream) {
-      micStream.getTracks().forEach(track => {
+      micStream.getAudioTracks().forEach(track => {
+        track.enabled = true;
         console.log('🎙️ Attaching local mic track to WebRTC:', track.label);
         peerConnection.addTrack(track, micStream);
       });
     }
 
     peerConnection.ontrack = (event) => {
-      console.log('🎙️ Real remote voice stream track received!', event.streams);
+      console.log('🎙️ Real remote voice stream track received!', event.streams, event.track);
       const audioEl = getRemoteAudioElement();
-      if (event.streams && event.streams[0]) {
-        audioEl.srcObject = event.streams[0];
-      } else {
-        audioEl.srcObject = new MediaStream([event.track]);
+      
+      if (event.track) {
+        event.track.enabled = true;
       }
-      audioEl.play().then(() => {
-        console.log('🔊 Remote audio stream is playing live out loud!');
-      }).catch(e => {
-        console.log('🔊 Remote audio play error:', e);
-      });
+
+      let stream = null;
+      if (event.streams && event.streams[0]) {
+        stream = event.streams[0];
+      } else if (event.track) {
+        stream = new MediaStream([event.track]);
+      }
+
+      if (stream) {
+        audioEl.srcObject = stream;
+        audioEl.volume = 1.0;
+        audioEl.muted = false;
+
+        const playPromise = audioEl.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('🔊 Remote audio stream is playing live out loud through speakers!');
+          }).catch(err => {
+            console.log('🔊 Remote audio autoplay prevented, registering tap fallback listener:', err);
+            const forcePlay = () => {
+              audioEl.play().catch(e => console.log('Force play error:', e));
+            };
+            window.addEventListener('touchstart', forcePlay, { once: true });
+            window.addEventListener('click', forcePlay, { once: true });
+          });
+        }
+      }
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -548,6 +608,9 @@ async function startVoiceCall(partner) {
   const maxId = Math.max(myId, partnerId);
   currentRoomId = `call_room_${minId}_${maxId}`;
 
+  // FIRST capture local mic stream and attach tracks!
+  await ensureMicStreamAndTracks();
+
   // Emit outgoing call notification to partner's phone
   if (socket && currentUser) {
     socket.emit('call_user', { caller: currentUser, recipientId: partnerId, roomId: currentRoomId });
@@ -567,22 +630,6 @@ async function startVoiceCall(partner) {
     const s = String(callSeconds % 60).padStart(2, '0');
     document.getElementById('callTimer').innerText = `${m}:${s}`;
   }, 1000);
-
-  // Microphone Web Audio capture & visualizer
-  try {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      analyser = audioContext.createAnalyser();
-      const source = audioContext.createMediaStreamSource(micStream);
-      source.connect(analyser);
-      analyser.fftSize = 64;
-      renderWaveformCanvas();
-    }
-  } catch (err) {
-    console.log('Mic permission not granted, running visualizer in simulation mode');
-    renderSimulatedWaveform();
-  }
 }
 
 // Render Real or Simulated Audio Canvas Waveform
@@ -766,13 +813,16 @@ function setupEventListeners() {
 
       document.getElementById('callModal').classList.add('active');
 
+      // FIRST capture local mic stream and attach tracks!
+      await ensureMicStreamAndTracks();
+
       // Emit accept call & join room to socket
       if (socket) {
         socket.emit('accept_call', { callerId: caller.id, recipient: currentUser, roomId });
         socket.emit('join_room', { roomId, userId: currentUser.id });
       }
 
-      // Start Call Timer & Mic Stream
+      // Start Call Timer
       callSeconds = 0;
       clearInterval(callTimerInterval);
       callTimerInterval = setInterval(() => {
@@ -781,20 +831,6 @@ function setupEventListeners() {
         const s = String(callSeconds % 60).padStart(2, '0');
         document.getElementById('callTimer').innerText = `${m}:${s}`;
       }, 1000);
-
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          analyser = audioContext.createAnalyser();
-          const source = audioContext.createMediaStreamSource(micStream);
-          source.connect(analyser);
-          analyser.fftSize = 64;
-          renderWaveformCanvas();
-        }
-      } catch (err) {
-        renderSimulatedWaveform();
-      }
     }
   });
 
