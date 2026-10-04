@@ -228,25 +228,44 @@ function initSocket() {
   }
 }
 
+function getRemoteAudioElement() {
+  if (!remoteAudioEl) {
+    remoteAudioEl = document.createElement('audio');
+    remoteAudioEl.id = 'remoteVoiceAudio';
+    remoteAudioEl.autoplay = true;
+    remoteAudioEl.playsInline = true;
+    remoteAudioEl.setAttribute('playsinline', '');
+    remoteAudioEl.setAttribute('autoplay', '');
+    document.body.appendChild(remoteAudioEl);
+  }
+  return remoteAudioEl;
+}
+
 function createPeerConnection(roomId) {
-  if (peerConnection) return;
+  if (peerConnection) return peerConnection;
   try {
     peerConnection = new RTCPeerConnection(rtcConfig);
 
     if (micStream) {
       micStream.getTracks().forEach(track => {
+        console.log('🎙️ Attaching local mic track to WebRTC:', track.label);
         peerConnection.addTrack(track, micStream);
       });
     }
 
     peerConnection.ontrack = (event) => {
-      console.log('🎙️ Real remote voice stream connected!');
-      if (!remoteAudioEl) {
-        remoteAudioEl = document.createElement('audio');
-        remoteAudioEl.autoplay = true;
-        document.body.appendChild(remoteAudioEl);
+      console.log('🎙️ Real remote voice stream track received!', event.streams);
+      const audioEl = getRemoteAudioElement();
+      if (event.streams && event.streams[0]) {
+        audioEl.srcObject = event.streams[0];
+      } else {
+        audioEl.srcObject = new MediaStream([event.track]);
       }
-      remoteAudioEl.srcObject = event.streams[0];
+      audioEl.play().then(() => {
+        console.log('🔊 Remote audio stream is playing live out loud!');
+      }).catch(e => {
+        console.log('🔊 Remote audio play error:', e);
+      });
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -257,6 +276,7 @@ function createPeerConnection(roomId) {
   } catch (e) {
     console.log('RTCPeerConnection error:', e);
   }
+  return peerConnection;
 }
 
 // Update Header UI based on Logged In User
@@ -756,14 +776,26 @@ function setupEventListeners() {
   document.getElementById('tabLogin')?.addEventListener('click', () => setAuthTab('login'));
   document.getElementById('tabSignup')?.addEventListener('click', () => setAuthTab('signup'));
 
-  // Logout Event Listener
-  document.getElementById('btnLogout')?.addEventListener('click', () => {
+  // Logout Event Listener (Clears active session in backend)
+  document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    if (currentUser && currentUser.id) {
+      try {
+        await fetch(`${API_BASE}/api/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id })
+        });
+      } catch (e) {}
+    }
+    if (socket && currentUser && currentUser.id) {
+      socket.emit('user_logout', { userId: currentUser.id });
+    }
     currentUser = null;
     authToken = null;
     localStorage.removeItem('cg_user');
     localStorage.removeItem('cg_token');
     updateAuthUI();
-    alert('Logged out successfully.');
+    alert('Logged out successfully. Account is now unlocked for login on any device.');
   });
 
   // Auth Form Submit (Strict Login & Register with MySQL Verification)

@@ -128,7 +128,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// SUPABASE Login Endpoint
+// SUPABASE Login Endpoint with Single Active Session Control
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -161,12 +161,42 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
+    // STRICT SINGLE SESSION CHECK: Prevent login if user is already logged in on another device
+    const isSocketActive = !!userSocketMap[user.id];
+    const isOnlineDb = user.is_online === true;
+
+    if (isSocketActive || isOnlineDb) {
+      return res.status(403).json({
+        error: '⚠️ Account is already logged in on another device! Simultaneous logins are not allowed. Please logout from that device first.'
+      });
+    }
+
+    // Set user as online in Supabase
+    await supabase.from('users').update({ is_online: true }).eq('id', user.id);
+    user.is_online = true;
+
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
     return res.json({ message: 'Cloud Supabase Login successful!', token, user });
 
   } catch (err) {
     return res.status(500).json({ error: 'Login exception: ' + err.message });
   }
+});
+
+// SUPABASE Logout Endpoint
+app.post('/api/auth/logout', async (req, res) => {
+  const { userId } = req.body;
+  if (userId) {
+    if (userSocketMap[userId]) {
+      delete userSocketMap[userId];
+    }
+    if (supabase) {
+      try {
+        await supabase.from('users').update({ is_online: false }).eq('id', userId);
+      } catch (e) {}
+    }
+  }
+  res.json({ success: true, message: 'Logged out successfully.' });
 });
 
 // Get Live Online Users from Supabase
@@ -349,6 +379,9 @@ io.on('connection', (socket) => {
     console.log(`🔌 Client disconnected: ${socket.id}`);
     if (socket.userId && userSocketMap[socket.userId] === socket.id) {
       delete userSocketMap[socket.userId];
+      if (supabase) {
+        supabase.from('users').update({ is_online: false }).eq('id', socket.userId).then();
+      }
     }
     broadcastRealLiveCount();
   });
