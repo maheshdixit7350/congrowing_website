@@ -45,7 +45,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let currentEarnedPoints = 15;
 
-let pendingIncomingCall = null;
+let ringtoneInterval = null;
+let ringAudioContext = null;
+
+// Synthesize Real Phone Ringtone Sound & Phone Vibration
+function startRingtone() {
+  stopRingtone();
+  try {
+    if (navigator.vibrate) {
+      navigator.vibrate([400, 200, 400, 200, 400, 200, 400]);
+    }
+  } catch (e) {}
+
+  function playToneBurst() {
+    try {
+      ringAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const osc1 = ringAudioContext.createOscillator();
+      const osc2 = ringAudioContext.createOscillator();
+      const gain = ringAudioContext.createGain();
+
+      osc1.frequency.value = 440; // Dual tone US/European standard phone ringtone 440Hz
+      osc2.frequency.value = 480; // 480Hz
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ringAudioContext.destination);
+
+      gain.gain.value = 0.15;
+      osc1.start();
+      osc2.start();
+
+      setTimeout(() => {
+        try {
+          osc1.stop();
+          osc2.stop();
+          if (ringAudioContext && ringAudioContext.state !== 'closed') ringAudioContext.close();
+        } catch (e) {}
+      }, 1200);
+    } catch (e) {}
+  }
+
+  playToneBurst();
+  ringtoneInterval = setInterval(playToneBurst, 3000);
+}
+
+function stopRingtone() {
+  if (ringtoneInterval) {
+    clearInterval(ringtoneInterval);
+    ringtoneInterval = null;
+  }
+  if (ringAudioContext) {
+    try { ringAudioContext.close(); } catch (e) {}
+    ringAudioContext = null;
+  }
+  if (navigator.vibrate) {
+    try { navigator.vibrate(0); } catch (e) {}
+  }
+}
 
 // Socket.io initialization & WebRTC Signaling
 function initSocket() {
@@ -88,10 +144,14 @@ function initSocket() {
 
         const modal = document.getElementById('incomingCallModal');
         if (modal) modal.classList.add('active');
+
+        // Play phone ringtone audio sound & trigger phone vibration
+        startRingtone();
       });
 
       socket.on('call_accepted', async ({ recipient, roomId }) => {
         console.log('✅ Call accepted by recipient:', recipient);
+        stopRingtone();
         const statusTag = document.getElementById('callStatusHeaderTag');
         if (statusTag) {
           statusTag.innerHTML = `<i class="fa-solid fa-circle"></i> LIVE VOICE CALL IN PROGRESS`;
@@ -103,6 +163,7 @@ function initSocket() {
 
       socket.on('call_declined', ({ reason }) => {
         console.log('❌ Call declined:', reason);
+        stopRingtone();
         alert(reason || 'Call was declined by user.');
         endVoiceCall();
       });
@@ -562,6 +623,7 @@ function setupEventListeners() {
 
   // Incoming Call Action Buttons (Recipient Phone)
   document.getElementById('btnAcceptCall')?.addEventListener('click', async () => {
+    stopRingtone();
     document.getElementById('incomingCallModal').classList.remove('active');
     if (pendingIncomingCall && currentUser) {
       const { caller, roomId } = pendingIncomingCall;
@@ -616,6 +678,7 @@ function setupEventListeners() {
   });
 
   document.getElementById('btnDeclineCall')?.addEventListener('click', () => {
+    stopRingtone();
     document.getElementById('incomingCallModal').classList.remove('active');
     if (pendingIncomingCall && socket) {
       socket.emit('decline_call', { callerId: pendingIncomingCall.caller.id, reason: `${currentUser ? currentUser.name : 'User'} declined the call.` });
