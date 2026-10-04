@@ -87,10 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
   drawRadarChart();
 });
 
-let currentEarnedPoints = 15;
-
 let ringtoneInterval = null;
-let ringAudioContext = null;
 
 // Synthesize Real Phone Ringtone Sound & Phone Vibration
 function startRingtone() {
@@ -103,37 +100,37 @@ function startRingtone() {
 
   function playToneBurst() {
     try {
-      if (!ringAudioContext || ringAudioContext.state === 'closed') {
-        ringAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
       }
-      
-      if (ringAudioContext.state === 'suspended') {
-        ringAudioContext.resume().catch(() => {});
-      }
-
-      const osc1 = ringAudioContext.createOscillator();
-      const osc2 = ringAudioContext.createOscillator();
-      const gain = ringAudioContext.createGain();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
 
       osc1.type = 'sine';
       osc2.type = 'sine';
-      osc1.frequency.setValueAtTime(440, ringAudioContext.currentTime); // Standard phone ringtone 440Hz
-      osc2.frequency.setValueAtTime(480, ringAudioContext.currentTime); // 480Hz
+      osc1.frequency.setValueAtTime(440, ctx.currentTime); // Standard phone ringtone 440Hz
+      osc2.frequency.setValueAtTime(480, ctx.currentTime); // 480Hz
 
-      gain.gain.setValueAtTime(0.35, ringAudioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ringAudioContext.currentTime + 1.4);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
 
       osc1.connect(gain);
       osc2.connect(gain);
-      gain.connect(ringAudioContext.destination);
+      gain.connect(ctx.destination);
 
-      osc1.start();
-      osc2.start();
+      osc1.start(ctx.currentTime);
+      osc2.start(ctx.currentTime);
 
-      osc1.stop(ringAudioContext.currentTime + 1.4);
-      osc2.stop(ringAudioContext.currentTime + 1.4);
+      osc1.stop(ctx.currentTime + 1.2);
+      osc2.stop(ctx.currentTime + 1.2);
+
+      setTimeout(() => {
+        try { if (ctx.state !== 'closed') ctx.close(); } catch (e) {}
+      }, 1400);
     } catch (e) {
-      console.log('Ringtone sound error:', e);
+      console.log('Ringtone tone error:', e);
     }
   }
 
@@ -146,10 +143,6 @@ function stopRingtone() {
     clearInterval(ringtoneInterval);
     ringtoneInterval = null;
   }
-  if (ringAudioContext) {
-    try { ringAudioContext.close(); } catch (e) {}
-    ringAudioContext = null;
-  }
   if (navigator.vibrate) {
     try { navigator.vibrate(0); } catch (e) {}
   }
@@ -158,9 +151,6 @@ function stopRingtone() {
 // Global Audio Unlocking for Mobile & Browser Autoplay Policies
 function unlockAudioOnUserGesture() {
   const unlock = () => {
-    if (ringAudioContext && ringAudioContext.state === 'suspended') {
-      ringAudioContext.resume().catch(() => {});
-    }
     if (audioContext && audioContext.state === 'suspended') {
       audioContext.resume().catch(() => {});
     }
@@ -441,11 +431,12 @@ function createPeerConnection(roomId) {
     };
 
     peerConnection.onconnectionstatechange = () => {
-      console.log('📡 WebRTC connection state changed:', peerConnection ? peerConnection.connectionState : 'null');
-      if (peerConnection && (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed')) {
+      const state = peerConnection ? peerConnection.connectionState : 'null';
+      console.log('📡 WebRTC connection state changed:', state);
+      if (state === 'failed') {
         const modal = document.getElementById('callModal');
         if (modal && modal.classList.contains('active')) {
-          console.log('⚠️ WebRTC connection lost/dropped. Stopping call on both ends.');
+          console.log('⚠️ WebRTC connection failed. Stopping call on both ends.');
           endVoiceCall(true);
         }
       }
