@@ -230,8 +230,20 @@ function initSocket() {
         if (statusTag) {
           statusTag.innerHTML = `<i class="fa-solid fa-circle"></i> LIVE VOICE CALL IN PROGRESS`;
         }
-        if (socket && roomId) {
-          socket.emit('join_room', { roomId, userId: currentUser ? currentUser.id : 0 });
+        
+        // Caller generates the single SDP offer for the voice call session
+        if (currentRoomId) {
+          console.log('🎙️ Caller initiating WebRTC offer...');
+          await ensureMicStreamAndTracks();
+          createPeerConnection(currentRoomId);
+          await ensureMicStreamAndTracks();
+          try {
+            const offer = await peerConnection.createOffer({ offerToReceiveAudio: true });
+            await peerConnection.setLocalDescription(offer);
+            socket.emit('webrtc_offer', { offer, roomId: currentRoomId });
+          } catch (e) {
+            console.log('WebRTC offer creation error', e);
+          }
         }
       });
 
@@ -251,24 +263,10 @@ function initSocket() {
       });
 
       // --- WebRTC Real-Time 2-Way Voice Signaling ---
-      socket.on('user_joined', async ({ socketId }) => {
-        console.log('🎙️ Partner joined call room:', socketId);
-        if (currentRoomId) {
-          createPeerConnection(currentRoomId);
-          await ensureMicStreamAndTracks();
-          try {
-            const offer = await peerConnection.createOffer({ offerToReceiveAudio: true });
-            await peerConnection.setLocalDescription(offer);
-            socket.emit('webrtc_offer', { offer, roomId: currentRoomId });
-          } catch (e) {
-            console.log('WebRTC offer creation error', e);
-          }
-        }
-      });
-
       socket.on('webrtc_offer', async ({ offer }) => {
-        console.log('🎙️ Received WebRTC audio offer');
+        console.log('🎙️ Received WebRTC audio offer from caller');
         if (currentRoomId) {
+          await ensureMicStreamAndTracks();
           createPeerConnection(currentRoomId);
           await ensureMicStreamAndTracks();
           try {
@@ -284,12 +282,12 @@ function initSocket() {
       });
 
       socket.on('webrtc_answer', async ({ answer }) => {
-        console.log('🎙️ Received WebRTC audio answer');
+        console.log('🎙️ Received WebRTC audio answer from recipient');
         if (peerConnection) {
           try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
             await processPendingIceCandidates();
-            console.log('🎙️ 2-Way Bidirectional WebRTC Audio Connection Established!');
+            console.log('🎙️ 2-Way Bidirectional WebRTC Audio Connection Established Successfully!');
           } catch (e) {}
         }
       });

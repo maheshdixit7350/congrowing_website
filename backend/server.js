@@ -413,7 +413,6 @@ io.on('connection', (socket) => {
 
   socket.on('leave_room', ({ roomId }) => {
     if (roomId) {
-      socket.to(roomId).emit('call_ended_by_partner', { message: 'Partner left the call room.' });
       socket.leave(roomId);
     }
     socket.currentRoomId = null;
