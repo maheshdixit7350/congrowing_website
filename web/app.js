@@ -29,9 +29,53 @@ let remoteAudioEl = null;
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp'
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
+  ],
+  iceCandidatePoolSize: 10
 };
+
+let pendingIceCandidates = [];
+let remoteAudioSourceNode = null;
+
+async function addIceCandidateSafely(candidate) {
+  if (!peerConnection || !candidate) return;
+  if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
+    try {
+      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log('📡 Added WebRTC ICE candidate successfully');
+    } catch (e) {
+      console.log('ICE candidate addition warning:', e);
+    }
+  } else {
+    console.log('📡 Queuing ICE candidate (remote description not ready yet)');
+    pendingIceCandidates.push(candidate);
+  }
+}
+
+async function processPendingIceCandidates() {
+  if (peerConnection && peerConnection.remoteDescription && pendingIceCandidates.length > 0) {
+    console.log(`📡 Flushing ${pendingIceCandidates.length} queued ICE candidates...`);
+    while (pendingIceCandidates.length > 0) {
+      const candidate = pendingIceCandidates.shift();
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {}
+    }
+  }
+}
 
 // Initialize on DOM Loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -239,6 +283,7 @@ function initSocket() {
           await ensureMicStreamAndTracks();
           try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            await processPendingIceCandidates();
             const answer = await peerConnection.createAnswer({ offerToReceiveAudio: true });
             await peerConnection.setLocalDescription(answer);
             socket.emit('webrtc_answer', { answer, roomId: currentRoomId });
@@ -253,16 +298,15 @@ function initSocket() {
         if (peerConnection) {
           try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            await processPendingIceCandidates();
             console.log('🎙️ 2-Way Bidirectional WebRTC Audio Connection Established!');
           } catch (e) {}
         }
       });
 
       socket.on('webrtc_ice', async ({ candidate }) => {
-        if (peerConnection && candidate) {
-          try {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (e) {}
+        if (candidate) {
+          await addIceCandidateSafely(candidate);
         }
       });
     }
@@ -357,6 +401,22 @@ function createPeerConnection(roomId) {
         audioEl.volume = 1.0;
         audioEl.muted = false;
 
+        // Route stream to Web Audio API destination for guaranteed speaker playout
+        try {
+          const ctx = (audioContext || new (window.AudioContext || window.webkitAudioContext)());
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+          if (remoteAudioSourceNode) {
+            try { remoteAudioSourceNode.disconnect(); } catch (e) {}
+          }
+          remoteAudioSourceNode = ctx.createMediaStreamSource(stream);
+          remoteAudioSourceNode.connect(ctx.destination);
+          console.log('🔊 Remote WebRTC audio stream connected to Web Audio destination!');
+        } catch (e) {
+          console.log('Web Audio remote play error:', e);
+        }
+
         const playPromise = audioEl.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
@@ -365,6 +425,7 @@ function createPeerConnection(roomId) {
             console.log('🔊 Remote audio autoplay prevented, registering tap fallback listener:', err);
             const forcePlay = () => {
               audioEl.play().catch(e => console.log('Force play error:', e));
+              if (audioContext && audioContext.state === 'suspended') audioContext.resume().catch(() => {});
             };
             window.addEventListener('touchstart', forcePlay, { once: true });
             window.addEventListener('click', forcePlay, { once: true });
@@ -679,6 +740,7 @@ function endVoiceCall(isRemoteEnd = false) {
   if (animFrameId) cancelAnimationFrame(animFrameId);
   
   const isRemote = (isRemoteEnd === true);
+  pendingIceCandidates = [];
 
   if (micStream) {
     try {
@@ -709,6 +771,11 @@ function endVoiceCall(isRemoteEnd = false) {
   if (currentRoomId && socket) {
     socket.emit('leave_room', { roomId: currentRoomId });
     currentRoomId = null;
+  }
+
+  if (remoteAudioSourceNode) {
+    try { remoteAudioSourceNode.disconnect(); } catch (e) {}
+    remoteAudioSourceNode = null;
   }
 
   if (remoteAudioEl) {
