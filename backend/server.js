@@ -161,18 +161,21 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
-    // STRICT SINGLE SESSION CHECK: Prevent login if user is already logged in on another device
+    // SINGLE SESSION CONTROL: Prevent dual login for the SAME account if active socket connection exists
     const isSocketActive = !!userSocketMap[user.id];
-    const isOnlineDb = user.is_online === true;
 
-    if (isSocketActive || isOnlineDb) {
+    if (isSocketActive) {
       return res.status(403).json({
-        error: '⚠️ Account is already logged in on another device! Simultaneous logins are not allowed. Please logout from that device first.'
+        error: `⚠️ Account "${user.name}" is already active on another device! Simultaneous logins for the SAME account are not allowed. Please logout from that device first.`
       });
     }
 
-    // Set user as online in Supabase
-    await supabase.from('users').update({ is_online: true }).eq('id', user.id);
+    // Set user as online in Supabase Cloud
+    if (supabase) {
+      try {
+        await supabase.from('users').update({ is_online: true }).eq('id', user.id);
+      } catch (e) {}
+    }
     user.is_online = true;
 
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
