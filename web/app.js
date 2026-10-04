@@ -50,6 +50,15 @@ const rtcConfig = {
 let pendingIceCandidates = [];
 let remoteAudioSourceNode = null;
 
+// Deterministic, string-safe WebRTC Call Room ID Generator for any user IDs (numbers, strings, UUIDs)
+function getCallRoomId(userAId, userBId) {
+  const a = String(userAId || '0');
+  const b = String(userBId || '0');
+  const sorted = [a, b].sort();
+  return `call_room_${sorted[0]}_${sorted[1]}`;
+}
+
+
 async function addIceCandidateSafely(candidate) {
   if (!peerConnection || !candidate) return;
   if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
@@ -597,20 +606,14 @@ function renderSpeakersGrid(users) {
     grid.appendChild(card);
   });
 
-// Deterministic, string-safe WebRTC Call Room ID Generator for any user IDs (numbers, strings, UUIDs)
-function getCallRoomId(userAId, userBId) {
-  const a = String(userAId || '0');
-  const b = String(userBId || '0');
-  const sorted = [a, b].sort();
-  return `call_room_${sorted[0]}_${sorted[1]}`;
-}
-
   // Attach Call Button Listeners (guarded by login requirement)
   document.querySelectorAll('.btnStartVoiceCall').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const uid = e.currentTarget.getAttribute('data-id');
-      const partner = currentUsers.find(u => String(u.id) === String(uid)) || currentUsers[0];
-      requireAuth(() => startVoiceCall(partner));
+      const partner = currentUsers.find(u => String(u.id) === String(uid));
+      if (partner) {
+        requireAuth(() => startVoiceCall(partner));
+      }
     });
   });
 }
@@ -662,8 +665,10 @@ function renderLeaderboard(list) {
   document.querySelectorAll('.btnLbCall').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const uid = e.currentTarget.getAttribute('data-id');
-      const partner = currentUsers.find(u => String(u.id) === String(uid)) || currentUsers[0];
-      requireAuth(() => startVoiceCall(partner));
+      const partner = currentUsers.find(u => String(u.id) === String(uid));
+      if (partner) {
+        requireAuth(() => startVoiceCall(partner));
+      }
     });
   });
 }

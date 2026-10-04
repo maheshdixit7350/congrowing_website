@@ -162,7 +162,8 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // SINGLE SESSION CONTROL: Prevent dual login for the SAME account if active socket connection exists
-    const isSocketActive = !!userSocketMap[user.id];
+    const activeSocketId = userSocketMap[user.id] || userSocketMap[String(user.id)];
+    const isSocketActive = activeSocketId && io.sockets && io.sockets.sockets && io.sockets.sockets.has(activeSocketId);
 
     if (isSocketActive) {
       return res.status(403).json({
@@ -425,10 +426,13 @@ io.on('connection', (socket) => {
       socket.to(socket.currentRoomId).emit('call_ended_by_partner', { message: 'Partner connection was lost or disconnected.' });
     }
     if (socket.userId) {
-      delete userSocketMap[socket.userId];
-      delete userSocketMap[String(socket.userId)];
-      if (supabase) {
-        supabase.from('users').update({ is_online: false }).eq('id', socket.userId).then();
+      const currentRegId = userSocketMap[socket.userId] || userSocketMap[String(socket.userId)];
+      if (currentRegId === socket.id) {
+        delete userSocketMap[socket.userId];
+        delete userSocketMap[String(socket.userId)];
+        if (supabase) {
+          supabase.from('users').update({ is_online: false }).eq('id', socket.userId).then();
+        }
       }
     }
     broadcastRealLiveCount();
