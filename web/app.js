@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let currentEarnedPoints = 15;
 
+let pendingIncomingCall = null;
+
 // Socket.io initialization & WebRTC Signaling
 function initSocket() {
   try {
@@ -52,6 +54,9 @@ function initSocket() {
       socket = io(API_BASE);
       socket.on('connect', () => {
         console.log('⚡ Connected to Socket.io server with ID:', socket.id);
+        if (currentUser && currentUser.id) {
+          socket.emit('register_user', { userId: currentUser.id, name: currentUser.name, username: currentUser.username });
+        }
       });
       socket.on('live_count', (data) => {
         if (data && typeof data.count === 'number') {
@@ -66,6 +71,48 @@ function initSocket() {
         console.log('⚡ Real-time Leaderboard update received:', data);
         fetchLeaderboard();
         fetchLiveUsers();
+      });
+
+      // --- INCOMING CALL & DIRECT CALL SIGNALING ---
+      socket.on('incoming_call', ({ caller, roomId }) => {
+        console.log('📞 Incoming call from:', caller);
+        pendingIncomingCall = { caller, roomId };
+
+        const avatarEl = document.getElementById('incomingCallerAvatar');
+        const nameEl = document.getElementById('incomingCallerName');
+        const criEl = document.getElementById('incomingCallerCri');
+
+        if (avatarEl) avatarEl.src = caller.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${caller.username || 'user'}`;
+        if (nameEl) nameEl.innerText = caller.name;
+        if (criEl) criEl.innerText = `CRI ${caller.cri_score || 750} · Calling you for a live 1-on-1 voice session`;
+
+        const modal = document.getElementById('incomingCallModal');
+        if (modal) modal.classList.add('active');
+      });
+
+      socket.on('call_accepted', async ({ recipient, roomId }) => {
+        console.log('✅ Call accepted by recipient:', recipient);
+        const statusTag = document.getElementById('callStatusHeaderTag');
+        if (statusTag) {
+          statusTag.innerHTML = `<i class="fa-solid fa-circle"></i> LIVE VOICE CALL IN PROGRESS`;
+        }
+        if (socket && roomId) {
+          socket.emit('join_room', { roomId, userId: currentUser ? currentUser.id : 0 });
+        }
+      });
+
+      socket.on('call_declined', ({ reason }) => {
+        console.log('❌ Call declined:', reason);
+        alert(reason || 'Call was declined by user.');
+        endVoiceCall();
+      });
+
+      socket.on('user_offline', ({ recipientId, message }) => {
+        console.log('⚠️ Recipient offline:', message);
+        const statusTag = document.getElementById('callStatusHeaderTag');
+        if (statusTag) {
+          statusTag.innerHTML = `<i class="fa-solid fa-phone-volume"></i> CALLING... (OFFLINE PRACTICE MODE ACTIVE)`;
+        }
       });
 
       // --- WebRTC Real-Time Voice Signaling ---
@@ -158,6 +205,11 @@ function updateAuthUI() {
   const guestNoticeBar = document.getElementById('guestNoticeBar');
 
   if (currentUser && currentUser.name) {
+    // Register socket ID for logged-in user to receive incoming calls
+    if (socket && currentUser.id) {
+      socket.emit('register_user', { userId: currentUser.id, name: currentUser.name, username: currentUser.username });
+    }
+
     // Logged In State
     if (btnOpenAuth) btnOpenAuth.classList.add('hidden');
     if (guestNoticeBar) guestNoticeBar.classList.add('hidden');
@@ -334,6 +386,11 @@ async function startVoiceCall(partner) {
   document.getElementById('meName').innerText = currentUser.name;
   document.getElementById('meCri').innerText = `CRI ${currentUser.cri_score || 750}`;
 
+  const statusTag = document.getElementById('callStatusHeaderTag');
+  if (statusTag) {
+    statusTag.innerHTML = `<i class="fa-solid fa-phone-volume"></i> CALLING ${partner.name.toUpperCase()}... WAITING FOR ANSWER`;
+  }
+
   document.getElementById('callModal').classList.add('active');
 
   // Compute WebRTC Room ID between current user and partner
@@ -342,6 +399,11 @@ async function startVoiceCall(partner) {
   const minId = Math.min(myId, partnerId);
   const maxId = Math.max(myId, partnerId);
   currentRoomId = `call_room_${minId}_${maxId}`;
+
+  // Emit outgoing call notification to partner's phone
+  if (socket && currentUser) {
+    socket.emit('call_user', { caller: currentUser, recipientId: partnerId, roomId: currentRoomId });
+  }
 
   // Join WebRTC Call Room
   if (socket) {
@@ -496,6 +558,69 @@ function setupEventListeners() {
   // Search Input
   document.getElementById('searchInput')?.addEventListener('input', () => {
     renderSpeakersGrid(currentUsers);
+  });
+
+  // Incoming Call Action Buttons (Recipient Phone)
+  document.getElementById('btnAcceptCall')?.addEventListener('click', async () => {
+    document.getElementById('incomingCallModal').classList.remove('active');
+    if (pendingIncomingCall && currentUser) {
+      const { caller, roomId } = pendingIncomingCall;
+      activeCallPartner = caller;
+      currentRoomId = roomId;
+
+      // Set call modal UI for recipient
+      document.getElementById('partnerAvatar').src = caller.avatar_url;
+      document.getElementById('partnerName').innerText = caller.name;
+      document.getElementById('partnerCri').innerText = `CRI ${caller.cri_score}`;
+      document.getElementById('meAvatar').src = currentUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.username || 'user'}`;
+      document.getElementById('meName').innerText = currentUser.name;
+      document.getElementById('meCri').innerText = `CRI ${currentUser.cri_score || 750}`;
+
+      const statusTag = document.getElementById('callStatusHeaderTag');
+      if (statusTag) {
+        statusTag.innerHTML = `<i class="fa-solid fa-circle"></i> LIVE VOICE CALL IN PROGRESS`;
+      }
+
+      document.getElementById('callModal').classList.add('active');
+
+      // Emit accept call & join room to socket
+      if (socket) {
+        socket.emit('accept_call', { callerId: caller.id, recipient: currentUser, roomId });
+        socket.emit('join_room', { roomId, userId: currentUser.id });
+      }
+
+      // Start Call Timer & Mic Stream
+      callSeconds = 0;
+      clearInterval(callTimerInterval);
+      callTimerInterval = setInterval(() => {
+        callSeconds++;
+        const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+        const s = String(callSeconds % 60).padStart(2, '0');
+        document.getElementById('callTimer').innerText = `${m}:${s}`;
+      }, 1000);
+
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioContext.createAnalyser();
+          const source = audioContext.createMediaStreamSource(micStream);
+          source.connect(analyser);
+          analyser.fftSize = 64;
+          renderWaveformCanvas();
+        }
+      } catch (err) {
+        renderSimulatedWaveform();
+      }
+    }
+  });
+
+  document.getElementById('btnDeclineCall')?.addEventListener('click', () => {
+    document.getElementById('incomingCallModal').classList.remove('active');
+    if (pendingIncomingCall && socket) {
+      socket.emit('decline_call', { callerId: pendingIncomingCall.caller.id, reason: `${currentUser ? currentUser.name : 'User'} declined the call.` });
+    }
+    pendingIncomingCall = null;
   });
 
   // Call Controls

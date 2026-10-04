@@ -303,14 +303,36 @@
     </div>
   </section>
 
+  <!-- Incoming Call Ringing Modal Popup -->
+  <div class="modal-overlay" id="incomingCallModal">
+    <div class="modal-card incoming-call-card glass-card">
+      <div class="incoming-ring-wrap">
+        <img src="" alt="Caller Avatar" id="incomingCallerAvatar" />
+        <div class="pulse-ring"></div>
+      </div>
+      <span class="incoming-status-tag pulse"><i class="fa-solid fa-phone-volume"></i> INCOMING VOICE CALL...</span>
+      <h3 id="incomingCallerName">Caller Name</h3>
+      <p id="incomingCallerCri">CRI Score · Wants to connect on a voice call</p>
+      
+      <div class="incoming-actions-bar">
+        <button class="btn btn-danger btn-lg" id="btnDeclineCall">
+          <i class="fa-solid fa-phone-slash"></i> Decline
+        </button>
+        <button class="btn btn-success btn-lg pulse-btn" id="btnAcceptCall">
+          <i class="fa-solid fa-phone"></i> Accept & Connect
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Interactive Voice Call Modal -->
   <div class="modal-overlay" id="callModal">
     <div class="modal-card call-modal-card">
       <button class="modal-close" id="btnCloseCallModal"><i class="fa-solid fa-xmark"></i></button>
 
       <div class="call-modal-header">
-        <span class="call-status-tag pulse"><i class="fa-solid fa-circle"></i> LIVE VOICE CALL IN PROGRESS</span>
-        <span class="call-timer" id="callTimer">00:14</span>
+        <span class="call-status-tag pulse" id="callStatusHeaderTag"><i class="fa-solid fa-circle"></i> LIVE VOICE CALL IN PROGRESS</span>
+        <span class="call-timer" id="callTimer">00:00</span>
       </div>
 
       <div class="call-speakers-stage">

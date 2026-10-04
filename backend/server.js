@@ -275,12 +275,52 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../web/index.html'));
 });
 
+// Active Logged-in User Socket Registry (userId -> socketId)
+const userSocketMap = {};
+
 // --- REAL AUDIENCE REAL-TIME SOCKET TRACKING & WEBRTC VOICE CALL SIGNALING ---
 io.on('connection', (socket) => {
   console.log(`🔌 Real client connected to Socket.io: ${socket.id}`);
   
   // Instantly broadcast true live audience count to all connected browsers
   broadcastRealLiveCount();
+
+  // Register user socket mapping
+  socket.on('register_user', ({ userId, name, username }) => {
+    if (userId) {
+      userSocketMap[userId] = socket.id;
+      socket.userId = userId;
+      console.log(`👤 User #${userId} (${name}) registered socket: ${socket.id}`);
+    }
+  });
+
+  // Initiate call to recipient
+  socket.on('call_user', ({ caller, recipientId, roomId }) => {
+    console.log(`📞 Call initiated from User #${caller ? caller.id : '?' } (${caller ? caller.name : 'User'}) to User #${recipientId}`);
+    const recipientSocketId = userSocketMap[recipientId];
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('incoming_call', { caller, roomId });
+    } else {
+      socket.emit('user_offline', { recipientId, message: 'User is currently offline or not on the platform.' });
+    }
+  });
+
+  // Accept incoming call
+  socket.on('accept_call', ({ callerId, recipient, roomId }) => {
+    console.log(`✅ Call accepted by User #${recipient ? recipient.id : '?' } for Caller #${callerId}`);
+    const callerSocketId = userSocketMap[callerId];
+    if (callerSocketId) {
+      io.to(callerSocketId).emit('call_accepted', { recipient, roomId });
+    }
+  });
+
+  // Decline incoming call
+  socket.on('decline_call', ({ callerId, reason }) => {
+    const callerSocketId = userSocketMap[callerId];
+    if (callerSocketId) {
+      io.to(callerSocketId).emit('call_declined', { reason: reason || 'Call declined by recipient.' });
+    }
+  });
 
   socket.on('join_room', ({ roomId, userId }) => {
     socket.join(roomId);
@@ -307,6 +347,9 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`🔌 Client disconnected: ${socket.id}`);
+    if (socket.userId && userSocketMap[socket.userId] === socket.id) {
+      delete userSocketMap[socket.userId];
+    }
     broadcastRealLiveCount();
   });
 });
