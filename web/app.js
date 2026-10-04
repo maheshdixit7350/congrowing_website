@@ -597,11 +597,19 @@ function renderSpeakersGrid(users) {
     grid.appendChild(card);
   });
 
+// Deterministic, string-safe WebRTC Call Room ID Generator for any user IDs (numbers, strings, UUIDs)
+function getCallRoomId(userAId, userBId) {
+  const a = String(userAId || '0');
+  const b = String(userBId || '0');
+  const sorted = [a, b].sort();
+  return `call_room_${sorted[0]}_${sorted[1]}`;
+}
+
   // Attach Call Button Listeners (guarded by login requirement)
   document.querySelectorAll('.btnStartVoiceCall').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const uid = parseInt(e.currentTarget.getAttribute('data-id')) || e.currentTarget.getAttribute('data-id');
-      const partner = currentUsers.find(u => u.id == uid) || currentUsers[0];
+      const uid = e.currentTarget.getAttribute('data-id');
+      const partner = currentUsers.find(u => String(u.id) === String(uid)) || currentUsers[0];
       requireAuth(() => startVoiceCall(partner));
     });
   });
@@ -653,8 +661,8 @@ function renderLeaderboard(list) {
 
   document.querySelectorAll('.btnLbCall').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const uid = parseInt(e.currentTarget.getAttribute('data-id'));
-      const partner = currentUsers.find(u => u.id === uid) || currentUsers[0];
+      const uid = e.currentTarget.getAttribute('data-id');
+      const partner = currentUsers.find(u => String(u.id) === String(uid)) || currentUsers[0];
       requireAuth(() => startVoiceCall(partner));
     });
   });
@@ -665,9 +673,9 @@ async function startVoiceCall(partner) {
   activeCallPartner = partner;
   
   // Set modal UI
-  document.getElementById('partnerAvatar').src = partner.avatar_url;
+  document.getElementById('partnerAvatar').src = partner.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${partner.username || 'user'}`;
   document.getElementById('partnerName').innerText = partner.name;
-  document.getElementById('partnerCri').innerText = `CRI ${partner.cri_score}`;
+  document.getElementById('partnerCri').innerText = `CRI ${partner.cri_score || 750}`;
   document.getElementById('meAvatar').src = currentUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.username || 'user'}`;
   document.getElementById('meName').innerText = currentUser.name;
   document.getElementById('meCri').innerText = `CRI ${currentUser.cri_score || 750}`;
@@ -679,12 +687,10 @@ async function startVoiceCall(partner) {
 
   document.getElementById('callModal').classList.add('active');
 
-  // Compute WebRTC Room ID between current user and partner
+  // Compute WebRTC Room ID safely for any user IDs (numbers, strings, UUIDs)
   const myId = currentUser ? currentUser.id : 0;
   const partnerId = partner ? partner.id : 0;
-  const minId = Math.min(myId, partnerId);
-  const maxId = Math.max(myId, partnerId);
-  currentRoomId = `call_room_${minId}_${maxId}`;
+  currentRoomId = getCallRoomId(myId, partnerId);
 
   // FIRST capture local mic stream and attach tracks!
   await ensureMicStreamAndTracks();
