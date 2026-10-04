@@ -304,6 +304,41 @@ function initSocket() {
   }
 }
 
+// Helper to bind local microphone track to WebRTC transceiver sender
+async function attachMicTrackToPeerConnection(pc, stream) {
+  if (!pc || !stream) return;
+  const audioTrack = stream.getAudioTracks()[0];
+  if (!audioTrack) return;
+  audioTrack.enabled = true;
+
+  try {
+    const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+    const audioTransceiver = transceivers.find(t => 
+      (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio') ||
+      (t.sender && t.sender.track && t.sender.track.kind === 'audio') ||
+      (t.mid !== null)
+    );
+
+    if (audioTransceiver && audioTransceiver.sender) {
+      console.log('🎙️ Binding mic track to existing transceiver sender:', audioTrack.label);
+      await audioTransceiver.sender.replaceTrack(audioTrack);
+      audioTransceiver.direction = 'sendrecv';
+    } else {
+      const senders = pc.getSenders ? pc.getSenders() : [];
+      const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+      if (audioSender) {
+        console.log('🎙️ Binding mic track to existing audio sender:', audioTrack.label);
+        await audioSender.replaceTrack(audioTrack);
+      } else {
+        console.log('🎙️ Adding mic track to peer connection:', audioTrack.label);
+        pc.addTrack(audioTrack, stream);
+      }
+    }
+  } catch (e) {
+    console.log('attachMicTrackToPeerConnection warning:', e);
+  }
+}
+
 // Ensure local microphone stream is captured and attached to RTCPeerConnection for 2-way audio
 async function ensureMicStreamAndTracks() {
   if (!micStream) {
@@ -330,34 +365,7 @@ async function ensureMicStreamAndTracks() {
   }
 
   if (peerConnection && micStream) {
-    const audioTrack = micStream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = true;
-      
-      const senders = peerConnection.getSenders();
-      const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-      
-      if (audioSender) {
-        console.log('🎙️ Binding audio track to existing sender:', audioTrack.label);
-        audioSender.replaceTrack(audioTrack).catch(e => console.log('replaceTrack error:', e));
-      } else {
-        console.log('🎙️ Adding local audio track to WebRTC peer connection:', audioTrack.label);
-        try {
-          peerConnection.addTrack(audioTrack, micStream);
-        } catch (e) {
-          console.log('addTrack warning:', e);
-        }
-      }
-
-      // Explicitly set all audio transceivers to 'sendrecv' mode
-      try {
-        peerConnection.getTransceivers().forEach(transceiver => {
-          if (transceiver.receiver && transceiver.receiver.track && transceiver.receiver.track.kind === 'audio') {
-            transceiver.direction = 'sendrecv';
-          }
-        });
-      } catch (e) {}
-    }
+    await attachMicTrackToPeerConnection(peerConnection, micStream);
   }
 }
 
