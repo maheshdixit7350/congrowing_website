@@ -613,12 +613,16 @@ function renderSpeakersGrid(users) {
     grid.appendChild(card);
   });
 
-  // Attach Call Button Listeners (guarded by login requirement)
+  // Attach Call Button Listeners (guarded by login requirement & online state)
   document.querySelectorAll('.btnStartVoiceCall').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const uid = e.currentTarget.getAttribute('data-id');
       const partner = currentUsers.find(u => String(u.id) === String(uid));
       if (partner) {
+        if (!partner.is_online) {
+          alert(`⚠️ ${partner.name} is currently offline. You can only place voice calls to users who are currently online!`);
+          return;
+        }
         requireAuth(() => startVoiceCall(partner));
       }
     });
@@ -675,6 +679,10 @@ function renderLeaderboard(list) {
       const uid = e.currentTarget.getAttribute('data-id');
       const partner = currentUsers.find(u => String(u.id) === String(uid));
       if (partner) {
+        if (!partner.is_online) {
+          alert(`⚠️ ${partner.name} is currently offline. You can only place voice calls to users who are currently online!`);
+          return;
+        }
         requireAuth(() => startVoiceCall(partner));
       }
     });
@@ -683,6 +691,13 @@ function renderLeaderboard(list) {
 
 // Start Interactive Voice Call
 async function startVoiceCall(partner) {
+  if (!partner) return;
+
+  if (!partner.is_online) {
+    alert(`⚠️ ${partner.name} is currently offline. Voice calls can only be established with active online users!`);
+    return;
+  }
+
   activeCallPartner = partner;
   
   // Set modal UI
@@ -857,31 +872,45 @@ function setupEventListeners() {
     document.getElementById('navLinks')?.classList.toggle('mobile-open');
   });
 
-  // Helper to get an available target partner excluding the logged-in user
-  const getOtherUser = (random = false) => {
-    const others = currentUsers.filter(u => !currentUser || String(u.id) !== String(currentUser.id));
-    if (others.length === 0) return currentUsers[0];
-    if (random) return others[Math.floor(Math.random() * others.length)];
-    return others[0];
+  // Helper to get an available ONLINE target partner excluding the logged-in user
+  const getOtherOnlineUser = (random = true) => {
+    const onlineOthers = currentUsers.filter(u => 
+      (!currentUser || String(u.id) !== String(currentUser.id)) && u.is_online
+    );
+    if (onlineOthers.length === 0) return null;
+    if (random) return onlineOthers[Math.floor(Math.random() * onlineOthers.length)];
+    return onlineOthers[0];
   };
 
-  // Hero & Nav CTAs (Guarded by Login Requirement)
+  // Hero & Nav CTAs (Guarded by Login Requirement & Online User Availability)
   document.getElementById('btnHeroConnect')?.addEventListener('click', () => {
     requireAuth(() => {
-      const partner = getOtherUser(false);
-      if (partner) startVoiceCall(partner);
+      const partner = getOtherOnlineUser(true);
+      if (!partner) {
+        alert('⚠️ No other speakers are currently online right now. Please wait for an online user to join or invite a friend!');
+        return;
+      }
+      startVoiceCall(partner);
     });
   });
   document.getElementById('btnNavQuickCall')?.addEventListener('click', () => {
     requireAuth(() => {
-      const partner = getOtherUser(true);
-      if (partner) startVoiceCall(partner);
+      const partner = getOtherOnlineUser(true);
+      if (!partner) {
+        alert('⚠️ No other speakers are currently online right now. Please wait for an online user to join or invite a friend!');
+        return;
+      }
+      startVoiceCall(partner);
     });
   });
   document.getElementById('btnCallHeroUser')?.addEventListener('click', () => {
     requireAuth(() => {
-      const partner = getOtherUser(false);
-      if (partner) startVoiceCall(partner);
+      const partner = getOtherOnlineUser(false);
+      if (!partner) {
+        alert('⚠️ No other speakers are currently online right now. Please wait for an online user to join or invite a friend!');
+        return;
+      }
+      startVoiceCall(partner);
     });
   });
   document.getElementById('btnHeroExplore')?.addEventListener('click', () => {
