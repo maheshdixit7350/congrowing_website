@@ -33,22 +33,61 @@ const rtcConfig = {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    {
-      urls: [
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
-        'turn:openrelay.metered.ca:443?transport=tcp'
-      ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
-    }
+    { urls: 'stun:global.stun.twilio.com:3478' }
   ],
   iceCandidatePoolSize: 10
 };
 
 let pendingIceCandidates = [];
 let remoteAudioSourceNode = null;
+let ringtoneBlobUrl = null;
+
+// Generate 100% Native, High-Quality PCM WAV Phone Ringtone Sound (440Hz + 480Hz dual tone)
+function createRingtoneAudioBlob() {
+  if (ringtoneBlobUrl) return ringtoneBlobUrl;
+  try {
+    const sampleRate = 8000;
+    const duration = 1.6;
+    const numSamples = Math.floor(sampleRate * duration);
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, 1, true); // Mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const env = Math.sin((i / numSamples) * Math.PI);
+      const sample = (Math.sin(2 * Math.PI * 440 * t) + Math.sin(2 * Math.PI * 480 * t)) * 0.4 * env;
+      const intSample = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
+      view.setInt16(44 + i * 2, intSample, true);
+    }
+
+    const blob = new Blob([buffer], { type: 'audio/wav' });
+    ringtoneBlobUrl = URL.createObjectURL(blob);
+    return ringtoneBlobUrl;
+  } catch (e) {
+    console.log('Ringtone blob creation warning:', e);
+    return null;
+  }
+}
 
 // Deterministic, string-safe WebRTC Call Room ID Generator for any user IDs (numbers, strings, UUIDs)
 function getCallRoomId(userAId, userBId) {
@@ -57,7 +96,6 @@ function getCallRoomId(userAId, userBId) {
   const sorted = [a, b].sort();
   return `call_room_${sorted[0]}_${sorted[1]}`;
 }
-
 
 async function addIceCandidateSafely(candidate) {
   if (!peerConnection || !candidate) return;
@@ -94,35 +132,47 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchLeaderboard();
   setupEventListeners();
   drawRadarChart();
+  
+  // Attach generated WAV ringtone to ringtoneAudio player
+  const ringEl = document.getElementById('ringtoneAudio');
+  if (ringEl) {
+    const srcUrl = createRingtoneAudioBlob();
+    if (srcUrl) ringEl.src = srcUrl;
+  }
 });
 
 let ringtoneInterval = null;
 
-// Synthesize Real Phone Ringtone Sound & Phone Vibration
+// Dual Phone Ringtone Sound Engine (HTML5 Audio + Web Audio Synthesizer) & Phone Vibration
 function startRingtone() {
   stopRingtone();
-  try {
-    if (navigator.vibrate) {
-      navigator.vibrate([500, 300, 500, 300, 500, 300, 500, 300]);
-    }
-  } catch (e) {}
 
+  // 1. Play HTML5 Audio Ringtone
+  const ringEl = document.getElementById('ringtoneAudio');
+  if (ringEl) {
+    if (!ringEl.src) {
+      const srcUrl = createRingtoneAudioBlob();
+      if (srcUrl) ringEl.src = srcUrl;
+    }
+    ringEl.currentTime = 0;
+    ringEl.play().catch(e => console.log('HTML5 ringtone play notice:', e));
+  }
+
+  // 2. Play Web Audio API Oscillator Tone Burst as backup
   function playToneBurst() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc1.type = 'sine';
       osc2.type = 'sine';
-      osc1.frequency.setValueAtTime(440, ctx.currentTime); // Standard phone ringtone 440Hz
-      osc2.frequency.setValueAtTime(480, ctx.currentTime); // 480Hz
+      osc1.frequency.setValueAtTime(440, ctx.currentTime);
+      osc2.frequency.setValueAtTime(480, ctx.currentTime);
 
-      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
 
       osc1.connect(gain);
@@ -131,20 +181,22 @@ function startRingtone() {
 
       osc1.start(ctx.currentTime);
       osc2.start(ctx.currentTime);
-
       osc1.stop(ctx.currentTime + 1.2);
       osc2.stop(ctx.currentTime + 1.2);
 
       setTimeout(() => {
         try { if (ctx.state !== 'closed') ctx.close(); } catch (e) {}
       }, 1400);
-    } catch (e) {
-      console.log('Ringtone tone error:', e);
-    }
+    } catch (e) {}
   }
 
   playToneBurst();
   ringtoneInterval = setInterval(playToneBurst, 2500);
+
+  // 3. Vibration
+  if (navigator.vibrate) {
+    try { navigator.vibrate([500, 300, 500, 300, 500, 300]); } catch (e) {}
+  }
 }
 
 function stopRingtone() {
@@ -152,19 +204,31 @@ function stopRingtone() {
     clearInterval(ringtoneInterval);
     ringtoneInterval = null;
   }
+  const ringEl = document.getElementById('ringtoneAudio');
+  if (ringEl) {
+    try {
+      ringEl.pause();
+      ringEl.currentTime = 0;
+    } catch (e) {}
+  }
   if (navigator.vibrate) {
     try { navigator.vibrate(0); } catch (e) {}
   }
 }
 
-// Global Audio Unlocking for Mobile & Browser Autoplay Policies
+// Global Audio Unlocking for Mobile & Desktop Browsers
 function unlockAudioOnUserGesture() {
   const unlock = () => {
+    const ringEl = document.getElementById('ringtoneAudio');
+    const voiceEl = document.getElementById('remoteVoiceAudio');
+    if (ringEl && ringEl.paused) {
+      ringEl.play().then(() => { ringEl.pause(); ringEl.currentTime = 0; }).catch(() => {});
+    }
+    if (voiceEl && voiceEl.paused && voiceEl.srcObject) {
+      voiceEl.play().catch(() => {});
+    }
     if (audioContext && audioContext.state === 'suspended') {
       audioContext.resume().catch(() => {});
-    }
-    if (remoteAudioEl && remoteAudioEl.paused && remoteAudioEl.srcObject) {
-      remoteAudioEl.play().catch(() => {});
     }
   };
   window.addEventListener('touchstart', unlock, { passive: true });
@@ -318,20 +382,31 @@ async function attachMicTrackToPeerConnection(pc, stream) {
   if (!pc || !stream) return;
   const audioTrack = stream.getAudioTracks()[0];
   if (!audioTrack) return;
-  audioTrack.enabled = true;
+  audioTrack.enabled = !isMuted;
 
   try {
     const senders = pc.getSenders ? pc.getSenders() : [];
     const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
     
     if (audioSender) {
-      console.log('🎙️ Mic track bound to sender:', audioTrack.label);
       if (audioSender.track !== audioTrack) {
+        console.log('🎙️ Replacing WebRTC mic track sender:', audioTrack.label);
         await audioSender.replaceTrack(audioTrack);
       }
     } else {
-      console.log('🎙️ Adding local mic track to peer connection:', audioTrack.label);
+      console.log('🎙️ Adding local mic track to WebRTC peer connection:', audioTrack.label);
       pc.addTrack(audioTrack, stream);
+    }
+
+    // Force transceiver direction to sendrecv to guarantee 2-way audio stream
+    if (pc.getTransceivers) {
+      pc.getTransceivers().forEach(tr => {
+        if (tr.receiver && tr.receiver.track && tr.receiver.track.kind === 'audio') {
+          tr.direction = 'sendrecv';
+        } else if (tr.sender && tr.sender.track && tr.sender.track.kind === 'audio') {
+          tr.direction = 'sendrecv';
+        }
+      });
     }
   } catch (e) {
     console.log('attachMicTrackToPeerConnection warning:', e);
@@ -340,7 +415,7 @@ async function attachMicTrackToPeerConnection(pc, stream) {
 
 // Ensure local microphone stream is captured and attached to RTCPeerConnection for 2-way audio
 async function ensureMicStreamAndTracks() {
-  if (!micStream) {
+  if (!micStream || !micStream.active || micStream.getAudioTracks().length === 0) {
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -349,18 +424,35 @@ async function ensureMicStreamAndTracks() {
           autoGainControl: true
         } 
       });
+      console.log('🎙️ Local mic stream captured:', micStream.getAudioTracks()[0].label);
+    } catch (e) {
+      console.error('Mic capture error:', e);
+      alert('Microphone access is required for voice calls. Please enable microphone permissions in your browser.');
+      return;
+    }
+  }
+
+  if (micStream && micStream.getAudioTracks().length > 0) {
+    micStream.getAudioTracks()[0].enabled = !isMuted;
+  }
+
+  if (!audioContext) {
+    try {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume().catch(() => {});
-      }
+    } catch (e) {}
+  }
+  if (audioContext && audioContext.state === 'suspended') {
+    await audioContext.resume().catch(() => {});
+  }
+
+  if (audioContext && micStream && !analyser) {
+    try {
       analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(micStream);
       source.connect(analyser);
       analyser.fftSize = 64;
       renderWaveformCanvas();
-    } catch (e) {
-      console.log('Mic stream capture error:', e);
-    }
+    } catch (e) {}
   }
 
   if (peerConnection && micStream) {
@@ -369,49 +461,49 @@ async function ensureMicStreamAndTracks() {
 }
 
 function getRemoteAudioElement() {
-  if (!remoteAudioEl) {
-    remoteAudioEl = document.createElement('audio');
-    remoteAudioEl.id = 'remoteVoiceAudio';
-    remoteAudioEl.autoplay = true;
-    remoteAudioEl.playsInline = true;
-    remoteAudioEl.volume = 1.0;
-    remoteAudioEl.muted = false;
-    remoteAudioEl.setAttribute('playsinline', '');
-    remoteAudioEl.setAttribute('autoplay', '');
-    document.body.appendChild(remoteAudioEl);
+  let audioEl = document.getElementById('remoteVoiceAudio');
+  if (!audioEl) {
+    audioEl = document.createElement('audio');
+    audioEl.id = 'remoteVoiceAudio';
+    audioEl.autoplay = true;
+    audioEl.playsInline = true;
+    audioEl.volume = 1.0;
+    audioEl.muted = false;
+    audioEl.setAttribute('playsinline', '');
+    audioEl.setAttribute('autoplay', '');
+    document.body.appendChild(audioEl);
   }
-  return remoteAudioEl;
+  return audioEl;
 }
 
 function createPeerConnection(roomId) {
   if (peerConnection) return peerConnection;
   try {
+    console.log('📡 Creating new RTCPeerConnection for room:', roomId);
     peerConnection = new RTCPeerConnection(rtcConfig);
 
-    if (micStream) {
+    if (micStream && micStream.getAudioTracks().length > 0) {
       micStream.getAudioTracks().forEach(track => {
-        track.enabled = true;
-        console.log('🎙️ Attaching local mic track to WebRTC:', track.label);
+        track.enabled = !isMuted;
+        console.log('🎙️ Attaching local mic track to RTCPeerConnection:', track.label);
         peerConnection.addTrack(track, micStream);
       });
     }
 
     peerConnection.ontrack = (event) => {
-      console.log('🎙️ Real remote voice stream track received!', event.streams, event.track);
+      console.log('🎙️ Remote WebRTC audio track received!', event.streams, event.track);
       const audioEl = getRemoteAudioElement();
       
       if (event.track) {
         event.track.enabled = true;
       }
 
-      let stream = null;
-      if (event.streams && event.streams[0]) {
-        stream = event.streams[0];
-      } else if (event.track) {
-        stream = new MediaStream([event.track]);
-      }
+      let stream = (event.streams && event.streams[0]) 
+        ? event.streams[0] 
+        : (event.track ? new MediaStream([event.track]) : null);
 
       if (stream) {
+        console.log('🔊 Binding remote audio stream to player element...');
         audioEl.srcObject = stream;
         audioEl.volume = 1.0;
         audioEl.muted = false;
@@ -421,13 +513,8 @@ function createPeerConnection(roomId) {
           playPromise.then(() => {
             console.log('🔊 Remote audio stream is playing live out loud through speakers!');
           }).catch(err => {
-            console.log('🔊 Remote audio autoplay prevented, registering tap fallback listener:', err);
-            const forcePlay = () => {
-              audioEl.play().catch(e => console.log('Force play error:', e));
-              if (audioContext && audioContext.state === 'suspended') audioContext.resume().catch(() => {});
-            };
-            window.addEventListener('touchstart', forcePlay, { once: true });
-            window.addEventListener('click', forcePlay, { once: true });
+            console.log('🔊 Audio playback notice:', err);
+            audioEl.play().catch(() => {});
           });
         }
       }
@@ -445,7 +532,7 @@ function createPeerConnection(roomId) {
       if (state === 'failed') {
         const modal = document.getElementById('callModal');
         if (modal && modal.classList.contains('active')) {
-          console.log('⚠️ WebRTC connection failed. Stopping call on both ends.');
+          console.log('⚠️ WebRTC connection failed. Stopping call.');
           endVoiceCall(true);
         }
       }
@@ -698,6 +785,25 @@ async function startVoiceCall(partner) {
 
   activeCallPartner = partner;
   
+  // Play outgoing phone ringtone sound for caller
+  startRingtone();
+
+  // Unlock audio player element in DOM inside direct user gesture
+  const voiceEl = getRemoteAudioElement();
+  if (voiceEl) {
+    voiceEl.volume = 1.0;
+    voiceEl.muted = false;
+    voiceEl.play().catch(() => {});
+  }
+
+  // Reset mute state
+  isMuted = false;
+  const micBtn = document.getElementById('btnToggleMic');
+  if (micBtn) {
+    micBtn.classList.remove('muted');
+    micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+  }
+
   // Set modal UI
   document.getElementById('partnerAvatar').src = partner.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${partner.username || 'user'}`;
   document.getElementById('partnerName').innerText = partner.name;
@@ -947,6 +1053,23 @@ function setupEventListeners() {
   document.getElementById('btnAcceptCall')?.addEventListener('click', async () => {
     stopRingtone();
     document.getElementById('incomingCallModal').classList.remove('active');
+
+    // Unlock audio player element in DOM inside direct user gesture
+    const voiceEl = getRemoteAudioElement();
+    if (voiceEl) {
+      voiceEl.volume = 1.0;
+      voiceEl.muted = false;
+      voiceEl.play().catch(() => {});
+    }
+
+    // Reset mute state
+    isMuted = false;
+    const micBtn = document.getElementById('btnToggleMic');
+    if (micBtn) {
+      micBtn.classList.remove('muted');
+      micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    }
+
     if (pendingIncomingCall && currentUser) {
       const { caller, roomId } = pendingIncomingCall;
       activeCallPartner = caller;
