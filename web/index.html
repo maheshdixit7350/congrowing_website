@@ -51,14 +51,14 @@
         <!-- Logged Out Auth Button -->
         <button class="btn btn-outline" id="btnOpenAuth"><i class="fa-solid fa-user-lock"></i> Login / Register</button>
 
-        <!-- Logged In User Profile Widget -->
-        <div class="user-profile-badge hidden" id="userProfileBadge">
+        <!-- Logged In User Profile Widget (Clickable for Profile & Logout Modal) -->
+        <div class="user-profile-badge hidden" id="userProfileBadge" title="Click to view profile & settings">
           <img src="" alt="User Avatar" id="navUserAvatar" />
           <div class="user-badge-info">
             <span class="user-badge-name" id="navUserName">Sameer Sahu</span>
             <span class="user-badge-cri" id="navUserCri">CRI 850 ⭐</span>
           </div>
-          <button class="btn-logout" id="btnLogout" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+          <button class="btn-logout" id="btnLogout" title="Logout Account"><i class="fa-solid fa-right-from-bracket"></i></button>
         </div>
 
         <button class="btn btn-primary" id="btnNavQuickCall"><i class="fa-solid fa-bolt"></i> Quick Match</button>
@@ -460,6 +460,50 @@
           <i class="fa-solid fa-right-to-bracket"></i> Login to ConGrowing
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- Interactive User Profile Card & Settings Modal -->
+  <div class="modal-overlay" id="profileModal">
+    <div class="modal-card profile-modal-card glass-card">
+      <button class="modal-close" id="btnCloseProfileModal"><i class="fa-solid fa-xmark"></i></button>
+
+      <div class="profile-modal-header">
+        <div class="profile-avatar-large">
+          <img src="" alt="Profile Avatar" id="profileModalAvatar" />
+          <div class="avatar-glow"></div>
+        </div>
+        <h3 id="profileModalName">User Name</h3>
+        <p class="profile-username" id="profileModalUsername">@username</p>
+        <p class="profile-email" id="profileModalEmail"><i class="fa-solid fa-envelope"></i> user@email.com</p>
+      </div>
+
+      <div class="profile-modal-stats">
+        <div class="p-stat-box">
+          <i class="fa-solid fa-award"></i>
+          <h4 id="profileModalCri">750</h4>
+          <span>CRI Score</span>
+        </div>
+        <div class="p-stat-box">
+          <i class="fa-solid fa-clock"></i>
+          <h4 id="profileModalHours">0.00</h4>
+          <span>Speaking Hrs</span>
+        </div>
+        <div class="p-stat-box">
+          <i class="fa-solid fa-circle-check"></i>
+          <h4 style="color:#10b981;">Active</h4>
+          <span>Cloud Account</span>
+        </div>
+      </div>
+
+      <div class="profile-modal-actions">
+        <button class="btn btn-glass btn-block" id="btnProfileViewStats">
+          <i class="fa-solid fa-chart-line"></i> View CRI Analytics
+        </button>
+        <button class="btn btn-danger btn-block" id="btnLogoutModal">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout Account
+        </button>
+      </div>
     </div>
   </div>
 

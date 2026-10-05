@@ -493,6 +493,30 @@ function updateAuthUI() {
   }
 }
 
+// Open Interactive Profile Modal
+function openProfileModal() {
+  if (!currentUser) return;
+  const avatarEl = document.getElementById('profileModalAvatar');
+  const nameEl = document.getElementById('profileModalName');
+  const userEl = document.getElementById('profileModalUsername');
+  const emailEl = document.getElementById('profileModalEmail');
+  const criEl = document.getElementById('profileModalCri');
+  const hrsEl = document.getElementById('profileModalHours');
+
+  if (avatarEl) avatarEl.src = currentUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.username || 'user'}`;
+  if (nameEl) nameEl.innerText = currentUser.name || 'User Profile';
+  if (userEl) userEl.innerText = `@${currentUser.username || (currentUser.email || '').split('@')[0] || 'user'}`;
+  if (emailEl) emailEl.innerHTML = `<i class="fa-solid fa-envelope"></i> ${currentUser.email || 'Registered User'}`;
+  if (criEl) criEl.innerText = currentUser.cri_score || 750;
+
+  const hrsNum = parseFloat(currentUser.speaking_hours);
+  const hrsFormatted = (!isNaN(hrsNum) && hrsNum >= 0) ? hrsNum.toFixed(2) : '0.00';
+  if (hrsEl) hrsEl.innerText = hrsFormatted;
+
+  const modal = document.getElementById('profileModal');
+  if (modal) modal.classList.add('active');
+}
+
 // Guard function: Requires user to be logged in before using any feature
 function requireAuth(onSuccess) {
   if (!currentUser) {
@@ -1043,8 +1067,27 @@ function setupEventListeners() {
   document.getElementById('tabLogin')?.addEventListener('click', () => setAuthTab('login'));
   document.getElementById('tabSignup')?.addEventListener('click', () => setAuthTab('signup'));
 
-  // Logout Event Listener (Clears active session in backend)
-  document.getElementById('btnLogout')?.addEventListener('click', async () => {
+  // Interactive Profile Badge Click -> Opens Profile Modal
+  document.getElementById('userProfileBadge')?.addEventListener('click', (e) => {
+    // If logout button clicked directly inside badge, handle logout directly
+    if (e.target.closest('#btnLogout')) {
+      return;
+    }
+    openProfileModal();
+  });
+
+  document.getElementById('btnCloseProfileModal')?.addEventListener('click', () => {
+    document.getElementById('profileModal')?.classList.remove('active');
+  });
+
+  document.getElementById('btnProfileViewStats')?.addEventListener('click', () => {
+    document.getElementById('profileModal')?.classList.remove('active');
+    document.getElementById('analytics')?.scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // Unified Logout Handler Function (Clears sessions, updates state, opens Login Modal)
+  async function performLogout() {
+    document.getElementById('profileModal')?.classList.remove('active');
     if (currentUser && currentUser.id) {
       try {
         await fetch(`${API_BASE}/api/auth/logout`, {
@@ -1057,12 +1100,33 @@ function setupEventListeners() {
     if (socket && currentUser && currentUser.id) {
       socket.emit('user_logout', { userId: currentUser.id });
     }
+
     currentUser = null;
     authToken = null;
     localStorage.removeItem('cg_user');
     localStorage.removeItem('cg_token');
+    sessionStorage.clear();
+
     updateAuthUI();
-    alert('Logged out successfully. Account is now unlocked for login on any device.');
+    fetchLeaderboard();
+    fetchLiveUsers();
+
+    alert('Logged out successfully.');
+
+    // Auto-open Login Modal
+    showAuthError('');
+    setAuthTab('login');
+    document.getElementById('authModal').classList.add('active');
+  }
+
+  // Logout Listeners for inline logout button and Profile Modal logout button
+  document.getElementById('btnLogout')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    performLogout();
+  });
+
+  document.getElementById('btnLogoutModal')?.addEventListener('click', () => {
+    performLogout();
   });
 
   // Auth Form Submit (Strict Login & Register with MySQL Verification)
