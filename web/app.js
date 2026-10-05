@@ -513,6 +513,10 @@ function updateAuthUI() {
     if (guestNoticeBar) guestNoticeBar.classList.remove('hidden');
     if (userProfileBadge) userProfileBadge.classList.add('hidden');
   }
+
+  if (currentUsers && currentUsers.length > 0) {
+    renderSpeakersGrid(currentUsers);
+  }
 }
 
 // Guard function: Requires user to be logged in before using any feature
@@ -559,6 +563,10 @@ function renderSpeakersGrid(users) {
   const searchVal = document.getElementById('searchInput')?.value.toLowerCase() || '';
 
   const filtered = users.filter(user => {
+    // Hide logged in user's own profile card from speakers grid (users call OTHER speakers, not themselves!)
+    if (currentUser && currentUser.id && String(user.id) === String(currentUser.id)) {
+      return false;
+    }
     const topicStr = user.topic || '';
     const matchSearch = user.name.toLowerCase().includes(searchVal) || topicStr.toLowerCase().includes(searchVal);
     const matchCat = currentCategory === 'All' || 
@@ -572,8 +580,7 @@ function renderSpeakersGrid(users) {
   filtered.forEach(user => {
     const card = document.createElement('div');
     const isOnline = !!user.is_online;
-    const isSelf = currentUser && (currentUser.id == user.id);
-    const statusText = isOnline ? (isSelf ? 'YOU (ONLINE)' : 'ONLINE NOW') : 'OFFLINE';
+    const statusText = isOnline ? 'ONLINE NOW' : 'OFFLINE';
     const statusClass = isOnline ? 'online' : 'offline';
 
     card.className = `glass-card speaker-card ${isOnline ? 'is-online' : 'is-offline'}`;
@@ -599,7 +606,7 @@ function renderSpeakersGrid(users) {
       </div>
       <div class="speaker-card-actions">
         <button class="btn ${isOnline ? 'btn-primary' : 'btn-outline'} btn-block btnStartVoiceCall" data-id="${user.id}">
-          <i class="fa-solid ${isOnline ? 'fa-phone-volume' : 'fa-phone'}"></i> ${isSelf ? 'Your Profile (Online)' : (isOnline ? 'Voice Call & Connect (LIVE)' : 'Call Speaker')}
+          <i class="fa-solid ${isOnline ? 'fa-phone-volume' : 'fa-phone'}"></i> ${isOnline ? 'Voice Call & Connect (LIVE)' : 'Call Speaker'}
         </button>
       </div>
     `;
@@ -644,6 +651,7 @@ function renderLeaderboard(list) {
     const hrsNum = parseFloat(user.speaking_hours);
     const hrsFormatted = (!isNaN(hrsNum) && hrsNum >= 0) ? hrsNum.toFixed(2) : '0.00';
     const avatar = user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username || 'user'}`;
+    const isSelf = currentUser && currentUser.id && String(user.id) === String(currentUser.id);
 
     const row = document.createElement('div');
     row.className = 'lb-row';
@@ -651,12 +659,12 @@ function renderLeaderboard(list) {
       <div><span class="rank-badge ${rankClass}">${rank}</span></div>
       <div class="speaker-user-cell">
         <img src="${avatar}" alt="${user.name}">
-        <span>${user.name}</span>
+        <span>${user.name} ${isSelf ? '<small style="color:var(--teal); font-weight:bold; margin-left:4px;">(You)</small>' : ''}</span>
       </div>
       <div><strong style="color: var(--teal);">CRI ${user.cri_score || 750}</strong></div>
       <div><strong>${hrsFormatted} hrs</strong></div>
       <div>
-        <button class="btn btn-sm btn-outline btnLbCall" data-id="${user.id}"><i class="fa-solid fa-phone"></i> Call</button>
+        ${isSelf ? '<span class="status-badge online" style="font-size:0.75rem;"><i class="fa-solid fa-user"></i> You</span>' : `<button class="btn btn-sm btn-outline btnLbCall" data-id="${user.id}"><i class="fa-solid fa-phone"></i> Call</button>`}
       </div>
     `;
     container.appendChild(row);
@@ -849,15 +857,32 @@ function setupEventListeners() {
     document.getElementById('navLinks')?.classList.toggle('mobile-open');
   });
 
+  // Helper to get an available target partner excluding the logged-in user
+  const getOtherUser = (random = false) => {
+    const others = currentUsers.filter(u => !currentUser || String(u.id) !== String(currentUser.id));
+    if (others.length === 0) return currentUsers[0];
+    if (random) return others[Math.floor(Math.random() * others.length)];
+    return others[0];
+  };
+
   // Hero & Nav CTAs (Guarded by Login Requirement)
   document.getElementById('btnHeroConnect')?.addEventListener('click', () => {
-    requireAuth(() => startVoiceCall(currentUsers[0]));
+    requireAuth(() => {
+      const partner = getOtherUser(false);
+      if (partner) startVoiceCall(partner);
+    });
   });
   document.getElementById('btnNavQuickCall')?.addEventListener('click', () => {
-    requireAuth(() => startVoiceCall(currentUsers[Math.floor(Math.random() * currentUsers.length)]));
+    requireAuth(() => {
+      const partner = getOtherUser(true);
+      if (partner) startVoiceCall(partner);
+    });
   });
   document.getElementById('btnCallHeroUser')?.addEventListener('click', () => {
-    requireAuth(() => startVoiceCall(currentUsers[0]));
+    requireAuth(() => {
+      const partner = getOtherUser(false);
+      if (partner) startVoiceCall(partner);
+    });
   });
   document.getElementById('btnHeroExplore')?.addEventListener('click', () => {
     document.getElementById('speakers')?.scrollIntoView({ behavior: 'smooth' });
