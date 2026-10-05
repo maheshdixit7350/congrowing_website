@@ -872,6 +872,13 @@ function setupEventListeners() {
     document.getElementById('navLinks')?.classList.toggle('mobile-open');
   });
 
+  // Close mobile nav when clicking any nav link
+  document.querySelectorAll('.nav-links a').forEach(link => {
+    link.addEventListener('click', () => {
+      document.getElementById('navLinks')?.classList.remove('mobile-open');
+    });
+  });
+
   // Helper to get an available ONLINE target partner excluding the logged-in user
   const getOtherOnlineUser = (random = true) => {
     const onlineOthers = currentUsers.filter(u => 
