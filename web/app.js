@@ -321,27 +321,17 @@ async function attachMicTrackToPeerConnection(pc, stream) {
   audioTrack.enabled = true;
 
   try {
-    const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
-    const audioTransceiver = transceivers.find(t => 
-      (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio') ||
-      (t.sender && t.sender.track && t.sender.track.kind === 'audio') ||
-      (t.mid !== null)
-    );
-
-    if (audioTransceiver && audioTransceiver.sender) {
-      console.log('🎙️ Binding mic track to existing transceiver sender:', audioTrack.label);
-      await audioTransceiver.sender.replaceTrack(audioTrack);
-      audioTransceiver.direction = 'sendrecv';
-    } else {
-      const senders = pc.getSenders ? pc.getSenders() : [];
-      const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-      if (audioSender) {
-        console.log('🎙️ Binding mic track to existing audio sender:', audioTrack.label);
+    const senders = pc.getSenders ? pc.getSenders() : [];
+    const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+    
+    if (audioSender) {
+      console.log('🎙️ Mic track bound to sender:', audioTrack.label);
+      if (audioSender.track !== audioTrack) {
         await audioSender.replaceTrack(audioTrack);
-      } else {
-        console.log('🎙️ Adding mic track to peer connection:', audioTrack.label);
-        pc.addTrack(audioTrack, stream);
       }
+    } else {
+      console.log('🎙️ Adding local mic track to peer connection:', audioTrack.label);
+      pc.addTrack(audioTrack, stream);
     }
   } catch (e) {
     console.log('attachMicTrackToPeerConnection warning:', e);
@@ -425,22 +415,6 @@ function createPeerConnection(roomId) {
         audioEl.srcObject = stream;
         audioEl.volume = 1.0;
         audioEl.muted = false;
-
-        // Route stream to Web Audio API destination for guaranteed speaker playout
-        try {
-          const ctx = (audioContext || new (window.AudioContext || window.webkitAudioContext)());
-          if (ctx.state === 'suspended') {
-            ctx.resume().catch(() => {});
-          }
-          if (remoteAudioSourceNode) {
-            try { remoteAudioSourceNode.disconnect(); } catch (e) {}
-          }
-          remoteAudioSourceNode = ctx.createMediaStreamSource(stream);
-          remoteAudioSourceNode.connect(ctx.destination);
-          console.log('🔊 Remote WebRTC audio stream connected to Web Audio destination!');
-        } catch (e) {
-          console.log('Web Audio remote play error:', e);
-        }
 
         const playPromise = audioEl.play();
         if (playPromise !== undefined) {
