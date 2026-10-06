@@ -250,11 +250,7 @@ function stopRingtone() {
 // Global Audio Unlocking for Mobile & Desktop Browsers
 function unlockAudioOnUserGesture() {
   const unlock = () => {
-    const ringEl = document.getElementById('ringtoneAudio');
     const voiceEl = document.getElementById('remoteVoiceAudio');
-    if (ringEl && ringEl.paused) {
-      ringEl.play().then(() => { ringEl.pause(); ringEl.currentTime = 0; }).catch(() => {});
-    }
     if (voiceEl && voiceEl.paused && voiceEl.srcObject) {
       voiceEl.play().catch(() => {});
     }
@@ -262,8 +258,8 @@ function unlockAudioOnUserGesture() {
       audioContext.resume().catch(() => {});
     }
   };
-  window.addEventListener('touchstart', unlock, { passive: true });
-  window.addEventListener('click', unlock, { passive: true });
+  window.addEventListener('touchstart', unlock, { passive: true, once: true });
+  window.addEventListener('click', unlock, { passive: true, once: true });
 }
 unlockAudioOnUserGesture();
 
