@@ -25,6 +25,7 @@ let animFrameId = null;
 let peerConnection = null;
 let currentRoomId = null;
 let remoteAudioEl = null;
+let pendingIncomingCall = null;
 
 const rtcConfig = {
   iceServers: [
@@ -97,11 +98,29 @@ function getCallRoomId(userAId, userBId) {
   return `call_room_${sorted[0]}_${sorted[1]}`;
 }
 
-async function addIceCandidateSafely(candidate) {
-  if (!peerConnection || !candidate) return;
+async function addIceCandidateSafely(candidateObj) {
+  if (!peerConnection || !candidateObj) return;
+
+  let candidate = null;
+  if (candidateObj instanceof RTCIceCandidate) {
+    candidate = candidateObj;
+  } else if (candidateObj.candidate) {
+    try {
+      candidate = new RTCIceCandidate({
+        candidate: candidateObj.candidate,
+        sdpMid: candidateObj.sdpMid,
+        sdpMLineIndex: candidateObj.sdpMLineIndex
+      });
+    } catch (e) {
+      console.log('RTCIceCandidate constructor notice:', e);
+    }
+  }
+
+  if (!candidate) return;
+
   if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
     try {
-      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      await peerConnection.addIceCandidate(candidate);
       console.log('📡 Added WebRTC ICE candidate successfully');
     } catch (e) {
       console.log('ICE candidate addition warning:', e);
@@ -118,7 +137,7 @@ async function processPendingIceCandidates() {
     while (pendingIceCandidates.length > 0) {
       const candidate = pendingIceCandidates.shift();
       try {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        await peerConnection.addIceCandidate(candidate);
       } catch (e) {}
     }
   }
@@ -522,7 +541,12 @@ function createPeerConnection(roomId) {
 
     peerConnection.onicecandidate = (event) => {
       if (event.candidate && socket) {
-        socket.emit('webrtc_ice', { candidate: event.candidate, roomId });
+        const candidateData = {
+          candidate: event.candidate.candidate,
+          sdpMid: event.candidate.sdpMid,
+          sdpMLineIndex: event.candidate.sdpMLineIndex
+        };
+        socket.emit('webrtc_ice', { candidate: candidateData, roomId });
       }
     };
 
