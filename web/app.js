@@ -280,6 +280,22 @@ function initSocket() {
         fetchLiveUsers();
       });
 
+      socket.on('session_replaced', ({ message }) => {
+        console.log('⚠️ Single Device Session Notice:', message);
+        stopRingtone();
+        endVoiceCall(true);
+        localStorage.removeItem('cg_user');
+        localStorage.removeItem('cg_token');
+        currentUser = null;
+        authToken = null;
+        updateAuthUI();
+
+        const msgEl = document.getElementById('singleDeviceMsg');
+        if (msgEl) msgEl.innerText = message || 'You have been logged out because your account was signed in from another device or browser tab.';
+        const modal = document.getElementById('singleDeviceModal');
+        if (modal) modal.classList.add('active');
+      });
+
       socket.on('call_ended_by_partner', ({ message }) => {
         console.log('⏹️ Call ended by partner:', message);
         stopRingtone();
@@ -432,6 +448,12 @@ async function attachMicTrackToPeerConnection(pc, stream) {
   }
 }
 
+function showMicPermissionGuidanceModal() {
+  stopRingtone();
+  const modal = document.getElementById('micPermissionModal');
+  if (modal) modal.classList.add('active');
+}
+
 // Ensure local microphone stream is captured and attached to RTCPeerConnection for 2-way audio
 async function ensureMicStreamAndTracks() {
   if (!micStream || !micStream.active || micStream.getAudioTracks().length === 0) {
@@ -446,8 +468,8 @@ async function ensureMicStreamAndTracks() {
       console.log('🎙️ Local mic stream captured:', micStream.getAudioTracks()[0].label);
     } catch (e) {
       console.error('Mic capture error:', e);
-      alert('Microphone access is required for voice calls. Please enable microphone permissions in your browser.');
-      return;
+      showMicPermissionGuidanceModal();
+      return false;
     }
   }
 
@@ -477,6 +499,7 @@ async function ensureMicStreamAndTracks() {
   if (peerConnection && micStream) {
     await attachMicTrackToPeerConnection(peerConnection, micStream);
   }
+  return true;
 }
 
 function getRemoteAudioElement() {
@@ -841,15 +864,19 @@ async function startVoiceCall(partner) {
     statusTag.innerHTML = `<i class="fa-solid fa-phone-volume"></i> CALLING ${partner.name.toUpperCase()}... WAITING FOR ANSWER`;
   }
 
+  // FIRST capture local mic stream and verify permissions!
+  const hasMic = await ensureMicStreamAndTracks();
+  if (hasMic === false) {
+    stopRingtone();
+    return;
+  }
+
   document.getElementById('callModal').classList.add('active');
 
   // Compute WebRTC Room ID safely for any user IDs (numbers, strings, UUIDs)
   const myId = currentUser ? currentUser.id : 0;
   const partnerId = partner ? partner.id : 0;
   currentRoomId = getCallRoomId(myId, partnerId);
-
-  // FIRST capture local mic stream and attach tracks!
-  await ensureMicStreamAndTracks();
 
   // Emit outgoing call notification to partner's phone
   if (socket && currentUser) {
@@ -1201,6 +1228,25 @@ function setupEventListeners() {
       fetchLeaderboard();
       fetchLiveUsers();
     }
+  });
+
+  // Microphone Permission Guidance Modal Listeners
+  document.getElementById('btnCloseMicPermModal')?.addEventListener('click', () => {
+    document.getElementById('micPermissionModal')?.classList.remove('active');
+  });
+  document.getElementById('btnRetryMicPermission')?.addEventListener('click', async () => {
+    document.getElementById('micPermissionModal')?.classList.remove('active');
+    const ok = await ensureMicStreamAndTracks();
+    if (ok) {
+      alert('✅ Microphone permission confirmed! You can now place and answer voice calls seamlessly.');
+    }
+  });
+
+  // Single Device Active Session Logout Modal Listener
+  document.getElementById('btnAckSingleDeviceLogout')?.addEventListener('click', () => {
+    document.getElementById('singleDeviceModal')?.classList.remove('active');
+    showAuthError('');
+    document.getElementById('authModal')?.classList.add('active');
   });
 
   // Auth Modals Toggle

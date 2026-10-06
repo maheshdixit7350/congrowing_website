@@ -2001,3 +2001,107 @@ canvas#waveformCanvas {
     padding: 5px 8px;
   }
 }
+
+/* Chrome Microphone Permission Guidance Modal Styling */
+.mic-perm-card, .single-device-card {
+  max-width: 480px;
+  width: 90%;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.mic-icon-pulse {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  margin: 0 auto 16px auto;
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.mic-perm-header h3, .single-device-header h3 {
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  margin-bottom: 8px;
+}
+
+.mic-perm-header p, .single-device-header p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.chrome-perm-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+  margin-bottom: 24px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+}
+
+.perm-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.step-text strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--text-bright);
+  margin-bottom: 2px;
+}
+
+.step-text p {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.step-text code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--teal);
+  font-size: 0.8rem;
+}
+
+.device-icon-badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(45, 212, 191, 0.15);
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  margin: 0 auto 16px auto;
+  border: 2px solid rgba(45, 212, 191, 0.4);
+}
+

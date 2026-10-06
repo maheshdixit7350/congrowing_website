@@ -327,17 +327,33 @@ app.get('*', (req, res) => {
 const userSocketMap = {};
 
 // --- REAL AUDIENCE REAL-TIME SOCKET TRACKING & WEBRTC VOICE CALL SIGNALING ---
+const busyUsers = new Set();
+
 io.on('connection', (socket) => {
   console.log(`🔌 Real client connected to Socket.io: ${socket.id}`);
   
   // Instantly broadcast true live audience count to all connected browsers
   broadcastRealLiveCount();
 
-  // Register user socket mapping
+  // Register user socket mapping (Single Device Active Session Enforcement)
   socket.on('register_user', ({ userId, name, username }) => {
     if (userId) {
+      const uIdStr = String(userId);
+      const existingSocketId = userSocketMap[uIdStr];
+
+      if (existingSocketId && existingSocketId !== socket.id) {
+        const existingSocket = io.sockets.sockets.get(existingSocketId);
+        if (existingSocket) {
+          console.log(`⚠️ Single Device Notice: User #${userId} logged in on new socket ${socket.id}. Disconnecting old socket ${existingSocketId}`);
+          existingSocket.emit('session_replaced', {
+            message: 'You have been logged out because your account was logged in from another device or browser tab.'
+          });
+          existingSocket.disconnect(true);
+        }
+      }
+
       userSocketMap[userId] = socket.id;
-      userSocketMap[String(userId)] = socket.id;
+      userSocketMap[uIdStr] = socket.id;
       socket.userId = userId;
       console.log(`👤 User #${userId} (${name}) registered socket: ${socket.id}`);
       io.emit('speakers_updated');
@@ -347,8 +363,10 @@ io.on('connection', (socket) => {
   socket.on('user_logout', ({ userId }) => {
     console.log(`👤 User #${userId} logged out`);
     if (userId) {
+      const uIdStr = String(userId);
+      busyUsers.delete(uIdStr);
       delete userSocketMap[userId];
-      delete userSocketMap[String(userId)];
+      delete userSocketMap[uIdStr];
     }
     if (supabase && userId) {
       supabase.from('users').update({ is_online: false }).eq('id', userId).then();
@@ -357,11 +375,30 @@ io.on('connection', (socket) => {
     io.emit('speakers_updated');
   });
 
-  // Initiate call to recipient
+  // Initiate call to recipient (Checks if target recipient is already busy on another call)
   socket.on('call_user', ({ caller, recipientId, roomId }) => {
     console.log(`📞 Call initiated from User #${caller ? caller.id : '?' } (${caller ? caller.name : 'User'}) to User #${recipientId}`);
-    const recipientSocketId = userSocketMap[recipientId] || userSocketMap[String(recipientId)];
+    const uIdStr = String(recipientId);
+
+    // Check if recipient is already engaged on another active call
+    if (busyUsers.has(uIdStr)) {
+      console.log(`⚠️ User #${recipientId} is currently busy on another voice call. Rejecting incoming call.`);
+      socket.emit('call_declined', { 
+        reason: '⚠️ User is currently engaged in another active voice call. Please try calling back in a few minutes!' 
+      });
+      return;
+    }
+
+    const recipientSocketId = userSocketMap[recipientId] || userSocketMap[uIdStr];
     if (recipientSocketId) {
+      const recipientSocket = io.sockets.sockets.get(recipientSocketId);
+      if (recipientSocket && recipientSocket.currentRoomId) {
+        console.log(`⚠️ User #${recipientId} socket is currently in room ${recipientSocket.currentRoomId}. Rejecting incoming call.`);
+        socket.emit('call_declined', { 
+          reason: '⚠️ User is currently engaged in another active voice call. Please try calling back in a few minutes!' 
+        });
+        return;
+      }
       io.to(recipientSocketId).emit('incoming_call', { caller, roomId });
     } else {
       socket.emit('user_offline', { recipientId, message: 'User is currently offline or not on the platform.' });
@@ -371,10 +408,14 @@ io.on('connection', (socket) => {
   // Accept incoming call
   socket.on('accept_call', ({ callerId, recipient, roomId }) => {
     console.log(`✅ Call accepted by User #${recipient ? recipient.id : '?' } for Caller #${callerId}`);
+    if (callerId) busyUsers.add(String(callerId));
+    if (recipient && recipient.id) busyUsers.add(String(recipient.id));
+
     const callerSocketId = userSocketMap[callerId] || userSocketMap[String(callerId)];
     if (callerSocketId) {
       io.to(callerSocketId).emit('call_accepted', { recipient, roomId });
     }
+    io.emit('speakers_updated');
   });
 
   // Decline incoming call
@@ -388,16 +429,21 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ roomId, userId }) => {
     socket.join(roomId);
     socket.currentRoomId = roomId;
+    if (userId) busyUsers.add(String(userId));
     console.log(`🎙️ Socket ${socket.id} (User ${userId}) joined room ${roomId}`);
     socket.to(roomId).emit('user_joined', { socketId: socket.id, userId });
+    io.emit('speakers_updated');
   });
 
-  // Explicit End Call Session event (drops call on both ends)
+  // Explicit End Call Session event (drops call on both ends and clears busy state)
   socket.on('end_call_session', ({ roomId, endedBy }) => {
     console.log(`⏹️ Call session ${roomId} ended by user ${endedBy}`);
+    if (endedBy) busyUsers.delete(String(endedBy));
+    if (socket.userId) busyUsers.delete(String(socket.userId));
     socket.to(roomId).emit('call_ended_by_partner', { endedBy, message: 'Partner ended the voice call.' });
     socket.leave(roomId);
     socket.currentRoomId = null;
+    io.emit('speakers_updated');
   });
 
   socket.on('webrtc_offer', ({ offer, roomId }) => {
@@ -416,11 +462,18 @@ io.on('connection', (socket) => {
     if (roomId) {
       socket.leave(roomId);
     }
+    if (socket.userId) {
+      busyUsers.delete(String(socket.userId));
+    }
     socket.currentRoomId = null;
+    io.emit('speakers_updated');
   });
 
   socket.on('disconnect', () => {
     console.log(`🔌 Client disconnected: ${socket.id}`);
+    if (socket.userId) {
+      busyUsers.delete(String(socket.userId));
+    }
     if (socket.currentRoomId) {
       console.log(`⏹️ Socket disconnected while in room ${socket.currentRoomId}. Notifying partner.`);
       socket.to(socket.currentRoomId).emit('call_ended_by_partner', { message: 'Partner connection was lost or disconnected.' });

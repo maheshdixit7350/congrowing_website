@@ -505,6 +505,65 @@
         </button>
       </div>
     </div>
+  <!-- Chrome Microphone Permission Guidance Modal -->
+  <div class="modal-overlay" id="micPermissionModal">
+    <div class="modal-card mic-perm-card glass-card">
+      <button class="modal-close" id="btnCloseMicPermModal"><i class="fa-solid fa-xmark"></i></button>
+
+      <div class="mic-perm-header">
+        <div class="mic-icon-pulse">
+          <i class="fa-solid fa-microphone-slash"></i>
+        </div>
+        <h3>Microphone Access Required</h3>
+        <p>To connect live voice calls, your browser needs microphone permission.</p>
+      </div>
+
+      <div class="chrome-perm-steps">
+        <div class="perm-step">
+          <span class="step-num">1</span>
+          <div class="step-text">
+            <strong>Click the Lock Icon 🔒</strong>
+            <p>Look at the address bar next to <code>congrowing.com</code> and click the <strong>🔒 Lock / Site controls</strong> icon.</p>
+          </div>
+        </div>
+        <div class="perm-step">
+          <span class="step-num">2</span>
+          <div class="step-text">
+            <strong>Open Site Settings</strong>
+            <p>Click <strong>Site settings</strong> (or toggle <strong>Microphone</strong> switch).</p>
+          </div>
+        </div>
+        <div class="perm-step">
+          <span class="step-num">3</span>
+          <div class="step-text">
+            <strong>Set Microphone to ALLOW</strong>
+            <p>Change <strong>Microphone</strong> setting from <em>Block</em> to <strong style="color:var(--teal);">Allow</strong>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mic-perm-actions">
+        <button class="btn btn-primary btn-block" id="btnRetryMicPermission">
+          <i class="fa-solid fa-microphone"></i> I've Allowed Permission - Retry Call
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Single Active Device Session Notice Modal -->
+  <div class="modal-overlay" id="singleDeviceModal">
+    <div class="modal-card single-device-card glass-card">
+      <div class="single-device-header">
+        <div class="device-icon-badge">
+          <i class="fa-solid fa-laptop-mobile"></i>
+        </div>
+        <h3>Session Signed In Elsewhere</h3>
+        <p id="singleDeviceMsg">You have been logged out because your account was signed in from another device or browser tab.</p>
+      </div>
+      <button class="btn btn-primary btn-block" id="btnAckSingleDeviceLogout">
+        <i class="fa-solid fa-right-to-bracket"></i> Understood - Login Again
+      </button>
+    </div>
   </div>
 
   <!-- Responsive Footer -->
