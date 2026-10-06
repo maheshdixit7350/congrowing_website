@@ -162,6 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let ringtoneInterval = null;
 
+let activeRingtoneCtxList = [];
+
 // Dual Phone Ringtone Sound Engine (HTML5 Audio + Web Audio Synthesizer) & Phone Vibration
 function startRingtone() {
   stopRingtone();
@@ -181,6 +183,7 @@ function startRingtone() {
   function playToneBurst() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      activeRingtoneCtxList.push(ctx);
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
@@ -191,8 +194,8 @@ function startRingtone() {
       osc1.frequency.setValueAtTime(440, ctx.currentTime);
       osc2.frequency.setValueAtTime(480, ctx.currentTime);
 
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.2);
 
       osc1.connect(gain);
       osc2.connect(gain);
@@ -204,8 +207,11 @@ function startRingtone() {
       osc2.stop(ctx.currentTime + 1.2);
 
       setTimeout(() => {
-        try { if (ctx.state !== 'closed') ctx.close(); } catch (e) {}
-      }, 1400);
+        try {
+          if (ctx && ctx.state !== 'closed') ctx.close();
+        } catch (e) {}
+        activeRingtoneCtxList = activeRingtoneCtxList.filter(c => c !== ctx);
+      }, 1300);
     } catch (e) {}
   }
 
@@ -222,6 +228,12 @@ function stopRingtone() {
   if (ringtoneInterval) {
     clearInterval(ringtoneInterval);
     ringtoneInterval = null;
+  }
+  while (activeRingtoneCtxList.length > 0) {
+    const c = activeRingtoneCtxList.pop();
+    try {
+      if (c && c.state !== 'closed') c.close();
+    } catch (e) {}
   }
   const ringEl = document.getElementById('ringtoneAudio');
   if (ringEl) {
@@ -992,9 +1004,24 @@ function endVoiceCall(isRemoteEnd = false) {
   const isRemote = (isRemoteEnd === true);
   pendingIceCandidates = [];
 
+  if (analyser) {
+    try { analyser.disconnect(); } catch (e) {}
+    analyser = null;
+  }
+
+  if (audioContext) {
+    try {
+      if (audioContext.state !== 'closed') audioContext.close();
+    } catch (e) {}
+    audioContext = null;
+  }
+
   if (micStream) {
     try {
-      micStream.getTracks().forEach(track => track.stop());
+      micStream.getTracks().forEach(track => {
+        track.enabled = false;
+        track.stop();
+      });
     } catch (e) {}
     micStream = null;
   }
