@@ -311,6 +311,18 @@ function initSocket() {
         }
       });
 
+      socket.on('call_cancelled', ({ callerId, message }) => {
+        console.log('🚫 Incoming call cancelled by caller:', message);
+        stopRingtone();
+        pendingIncomingCall = null;
+        const incModal = document.getElementById('incomingCallModal');
+        if (incModal) incModal.classList.remove('active');
+        const activeModal = document.getElementById('callModal');
+        if (activeModal && activeModal.classList.contains('active')) {
+          endVoiceCall(true);
+        }
+      });
+
       // --- INCOMING CALL & DIRECT CALL SIGNALING ---
       socket.on('incoming_call', ({ caller, roomId }) => {
         console.log('📞 Incoming call from:', caller);
@@ -663,6 +675,36 @@ function requireAuth(onSuccess) {
   return true;
 }
 
+let heroFeaturedPartner = null;
+
+function updateHeroSpeakerCard(users) {
+  if (!users || users.length === 0) return;
+  const onlineOthers = users.filter(u => 
+    (!currentUser || String(u.id) !== String(currentUser.id)) && u.is_online
+  );
+
+  if (onlineOthers.length === 0) return;
+
+  // Prefer Elena Rostova if online and not current user, otherwise pick top online speaker
+  let featured = onlineOthers.find(u => u.name.toLowerCase().includes('elena'));
+  if (!featured) featured = onlineOthers[0];
+
+  heroFeaturedPartner = featured;
+
+  const imgEl = document.getElementById('heroUserImg');
+  const nameEl = document.getElementById('heroUserName');
+  const topicEl = document.getElementById('heroUserTopic');
+  const btnEl = document.getElementById('btnCallHeroUser');
+
+  if (imgEl) imgEl.src = featured.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${featured.username || 'user'}`;
+  if (nameEl) nameEl.innerText = featured.name;
+  if (topicEl) topicEl.innerHTML = `<i class="fa-solid fa-comments"></i> ${featured.topic || 'Voice Call & Fluency Practice'}`;
+  if (btnEl) {
+    const firstName = featured.name.split(' ')[0] || 'Speaker';
+    btnEl.innerHTML = `<i class="fa-solid fa-phone"></i> Call ${firstName} Now`;
+  }
+}
+
 // Fetch Live Users from Backend API
 async function fetchLiveUsers() {
   try {
@@ -671,6 +713,7 @@ async function fetchLiveUsers() {
     if (data && data.users) {
       currentUsers = data.users;
       renderSpeakersGrid(currentUsers);
+      updateHeroSpeakerCard(currentUsers);
     }
   } catch (err) {
     console.log('API offline, rendering initial speakers list');
@@ -683,6 +726,7 @@ async function fetchLiveUsers() {
       { id: 6, name: 'Alex Vance', username: 'alex_v', avatar_url: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=400&auto=format&fit=crop&q=80', cri_score: 880, topic: 'Confidence Building', is_online: 1, compatibility: 96 }
     ];
     renderSpeakersGrid(currentUsers);
+    updateHeroSpeakerCard(currentUsers);
   }
 }
 
@@ -956,11 +1000,20 @@ function endVoiceCall(isRemoteEnd = false) {
   }
 
   // If local user initiated the end call, notify partner over socket
-  if (!isRemote && currentRoomId && socket) {
-    socket.emit('end_call_session', { 
-      roomId: currentRoomId, 
-      endedBy: currentUser ? currentUser.id : 'user' 
-    });
+  if (!isRemote && socket) {
+    if (activeCallPartner) {
+      socket.emit('cancel_call', { 
+        callerId: currentUser ? currentUser.id : 'user',
+        recipientId: activeCallPartner.id,
+        roomId: currentRoomId
+      });
+    }
+    if (currentRoomId) {
+      socket.emit('end_call_session', { 
+        roomId: currentRoomId, 
+        endedBy: currentUser ? currentUser.id : 'user' 
+      });
+    }
   }
 
   // Cleanup WebRTC P2P connection
@@ -1067,12 +1120,16 @@ function setupEventListeners() {
   });
   document.getElementById('btnCallHeroUser')?.addEventListener('click', () => {
     requireAuth(() => {
-      const partner = getOtherOnlineUser(false);
-      if (!partner) {
-        alert('⚠️ No other speakers are currently online right now. Please wait for an online user to join or invite a friend!');
-        return;
+      if (heroFeaturedPartner && heroFeaturedPartner.is_online) {
+        startVoiceCall(heroFeaturedPartner);
+      } else {
+        const partner = getOtherOnlineUser(true);
+        if (!partner) {
+          alert('⚠️ No other speakers are currently online right now. Please wait for an online user to join or invite a friend!');
+          return;
+        }
+        startVoiceCall(partner);
       }
-      startVoiceCall(partner);
     });
   });
   document.getElementById('btnHeroExplore')?.addEventListener('click', () => {

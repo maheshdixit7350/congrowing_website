@@ -426,6 +426,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Cancel outgoing call before recipient answers
+  socket.on('cancel_call', ({ callerId, recipientId, roomId }) => {
+    console.log(`🚫 Call cancelled by Caller #${callerId} to Recipient #${recipientId}`);
+    if (callerId) busyUsers.delete(String(callerId));
+    if (recipientId) busyUsers.delete(String(recipientId));
+
+    const recipientSocketId = userSocketMap[recipientId] || userSocketMap[String(recipientId)];
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('call_cancelled', { callerId, message: 'Call was cancelled by the caller.' });
+    }
+    io.emit('speakers_updated');
+  });
+
   socket.on('join_room', ({ roomId, userId }) => {
     socket.join(roomId);
     socket.currentRoomId = roomId;
