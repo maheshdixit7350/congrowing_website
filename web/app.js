@@ -16,10 +16,30 @@ let activeCallPartner = null;
 let callTimerInterval = null;
 let callSeconds = 0;
 let isMuted = false;
+let isLoudSpeaker = false; // Default: false = Normal Call Volume (Earpiece), true = Loud Speaker Mode
 let audioContext = null;
 let analyser = null;
 let micStream = null;
 let animFrameId = null;
+
+// Helper to update Loudspeaker Button UI and Audio Volume
+function updateSpeakerButtonUI() {
+  const audioEl = document.getElementById('remoteVoiceAudio');
+  const spkBtn = document.getElementById('btnToggleSpeaker');
+  const targetVol = isLoudSpeaker ? 1.0 : 0.35;
+
+  if (audioEl) {
+    audioEl.volume = targetVol;
+  }
+
+  if (spkBtn) {
+    spkBtn.classList.toggle('active-speaker', isLoudSpeaker);
+    spkBtn.innerHTML = isLoudSpeaker 
+      ? '<i class="fa-solid fa-volume-high"></i>' 
+      : '<i class="fa-solid fa-volume-low"></i>';
+    spkBtn.setAttribute('title', isLoudSpeaker ? 'Loud Speaker Mode (ON)' : 'Normal Call Volume (OFF)');
+  }
+}
 
 // WebRTC Peer-to-Peer Voice Call State
 let peerConnection = null;
@@ -529,7 +549,7 @@ function getRemoteAudioElement() {
     audioEl.id = 'remoteVoiceAudio';
     audioEl.autoplay = true;
     audioEl.playsInline = true;
-    audioEl.volume = 1.0;
+    audioEl.volume = isLoudSpeaker ? 1.0 : 0.35;
     audioEl.muted = false;
     audioEl.setAttribute('playsinline', '');
     audioEl.setAttribute('autoplay', '');
@@ -567,7 +587,7 @@ function createPeerConnection(roomId) {
       if (stream) {
         console.log('🔊 Binding remote audio stream to player element...');
         audioEl.srcObject = stream;
-        audioEl.volume = 1.0;
+        audioEl.volume = isLoudSpeaker ? 1.0 : 0.35;
         audioEl.muted = false;
 
         const playPromise = audioEl.play();
@@ -890,13 +910,15 @@ async function startVoiceCall(partner) {
   // Unlock audio player element in DOM inside direct user gesture
   const voiceEl = getRemoteAudioElement();
   if (voiceEl) {
-    voiceEl.volume = 1.0;
+    voiceEl.volume = isLoudSpeaker ? 1.0 : 0.35;
     voiceEl.muted = false;
     voiceEl.play().catch(() => {});
   }
 
-  // Reset mute state
+  // Reset mute & speaker state (Default: Normal Call Volume Mode)
   isMuted = false;
+  isLoudSpeaker = false;
+  updateSpeakerButtonUI();
   const micBtn = document.getElementById('btnToggleMic');
   if (micBtn) {
     micBtn.classList.remove('muted');
@@ -1188,13 +1210,15 @@ function setupEventListeners() {
     // Unlock audio player element in DOM inside direct user gesture
     const voiceEl = getRemoteAudioElement();
     if (voiceEl) {
-      voiceEl.volume = 1.0;
+      voiceEl.volume = isLoudSpeaker ? 1.0 : 0.35;
       voiceEl.muted = false;
       voiceEl.play().catch(() => {});
     }
 
-    // Reset mute state
+    // Reset mute & speaker state (Default: Normal Call Volume Mode)
     isMuted = false;
+    isLoudSpeaker = false;
+    updateSpeakerButtonUI();
     const micBtn = document.getElementById('btnToggleMic');
     if (micBtn) {
       micBtn.classList.remove('muted');
@@ -1262,6 +1286,13 @@ function setupEventListeners() {
     if (micStream) {
       micStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
     }
+  });
+
+  // Loudspeaker Mode Toggle Button
+  document.getElementById('btnToggleSpeaker')?.addEventListener('click', () => {
+    isLoudSpeaker = !isLoudSpeaker;
+    updateSpeakerButtonUI();
+    console.log('🔊 Speaker mode toggled:', isLoudSpeaker ? 'LOUDSPEAKER (100%)' : 'NORMAL CALL EARPIECE (35%)');
   });
 
   // Stage Join Buttons (Guarded by Login Requirement)

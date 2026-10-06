@@ -1378,6 +1378,12 @@ canvas#waveformCanvas {
   color: #fff;
 }
 
+.ctrl-btn.active-speaker {
+  background: linear-gradient(135deg, var(--teal), #059669) !important;
+  color: #fff !important;
+  box-shadow: 0 0 15px rgba(45, 212, 191, 0.5) !important;
+}
+
 .btn-end-call {
   width: auto;
   padding: 0 20px;
